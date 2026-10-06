@@ -8,8 +8,9 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 
-# Raw dataset files
+# Dataset files
 data/raw/
+data/processed/
 
 # Secrets
 .env
