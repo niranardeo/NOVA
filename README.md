@@ -1,4 +1,4 @@
-## Dataset
+## Dataset Files
 
 The full CICIDS2017 dataset and generated train/test splits are not
 included in this repository because of their file size.
