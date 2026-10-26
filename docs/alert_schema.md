@@ -80,3 +80,44 @@ Suggested response fields:
 - abstain
 
 The final response schema must be agreed upon by both components.
+
+
+## Qwen Handoff — Integration Guidance
+
+### Current Integration Status
+
+NOVA uses Decision Tree and Random Forest classifiers to
+identify potentially malicious network traffic.
+
+The notebook includes a JSON export integration for both
+classifiers using src/alert_adapter.py.
+
+Synthetic JSON alerts have been generated and validated.
+Actual CICIDS2017 model predictions have not yet been
+exported through this integration.
+
+### JSON Files for Qwen
+
+Decision Tree:
+outputs/decision_tree_alerts.json
+
+Random Forest:
+outputs/random_forest_alerts.json
+
+Each file contains predicted attack classifications and
+approved network-flow evidence.
+
+### Qwen Responsibilities
+
+1. Read and validate the JSON alerts.
+2. Explain predicted attacks using the supplied evidence.
+3. Identify uncertainty and limitations.
+4. Never treat predictions as confirmed attacks.
+5. Never invent missing evidence or confidence scores.
+6. Preserve alert IDs for traceability.
+7. Handle empty alert lists correctly.
+
+### Current Limitations
+
+The Qwen integration has not yet been implemented or tested.
+The final input and response formats require team agreement.
