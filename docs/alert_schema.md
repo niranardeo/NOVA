@@ -72,7 +72,6 @@ The example above is synthetic, not a real model prediction.
 16. If serialization fails, an existing destination file is
     preserved and the temporary file is cleaned up.
 
-## Current Limitations
 
 ## Current Limitations
 
@@ -120,17 +119,6 @@ The final response schema must be agreed upon by both components.
 
 ## Qwen Handoff — Integration Guidance
 
-### Current Integration Status
-
-NOVA uses Decision Tree and Random Forest classifiers to
-identify potentially malicious network traffic.
-
-The notebook includes a JSON export integration for both
-classifiers using src/alert_adapter.py.
-
-Synthetic JSON alerts have been generated and validated.
-Actual CICIDS2017 model predictions have not yet been
-exported through this integration.
 
 ### Current Integration Status
 
