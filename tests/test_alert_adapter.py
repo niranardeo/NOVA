@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from unittest.mock import patch
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from alert_adapter import export_alerts
@@ -136,6 +138,69 @@ class TestAlertAdapter(unittest.TestCase):
                 )
 
             self.assertFalse(output.exists())
+
+    def test_none_evidence_rejected(self):
+        features = pd.DataFrame({
+            "Flow Duration": [None],
+            "Total Fwd Packets": [5]
+        })
+
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "invalid.json"
+
+            with self.assertRaises(ValueError):
+                export_alerts(
+                    features,
+                    ["DoS"],
+                    "decision_tree",
+                    output
+                )
+
+            self.assertFalse(output.exists())
+
+    def test_nonnumeric_evidence_rejected(self):
+        for invalid_value in ["unknown", "100", True]:
+            with self.subTest(value=invalid_value):
+                with tempfile.TemporaryDirectory() as folder:
+                    features = pd.DataFrame({
+                        "Flow Duration": [invalid_value],
+                        "Total Fwd Packets": [5]
+                    })
+
+                    output = Path(folder) / "invalid.json"
+
+                    with self.assertRaises(ValueError):
+                        export_alerts(
+                            features,
+                            ["DoS"],
+                            "decision_tree",
+                            output
+                        )
+
+                    self.assertFalse(output.exists())
+
+    def test_failed_json_write_preserves_existing_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "alerts.json"
+            original = '{"status": "previous valid export"}'
+            output.write_text(original, encoding="utf-8")
+
+            with patch(
+                "alert_adapter.json.dump",
+                side_effect=OSError("Simulated write failure")
+            ):
+                with self.assertRaises(OSError):
+                    export_alerts(
+                        self.features,
+                        ["Normal Traffic", "DoS", "Normal Traffic"],
+                        "decision_tree",
+                        output
+                    )
+
+            self.assertEqual(
+                output.read_text(encoding="utf-8"),
+                original
+            )
 
 if __name__ == "__main__":
     unittest.main()

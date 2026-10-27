@@ -1,5 +1,7 @@
 import json
 import math
+import os
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -23,11 +25,20 @@ ALLOWED_EVIDENCE = (
 )
 
 def clean_value(value):
-    """Convert NumPy values to JSON-compatible Python values."""
+    """Validate and convert numeric evidence to JSON-compatible values."""
+
+    if value is None or pd.isna(value):
+        raise ValueError("Alert evidence contains missing values")
+
     if isinstance(value, np.generic):
         value = value.item()
 
-    if isinstance(value, float) and not math.isfinite(value):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(
+        value, (int, float)
+    ):
+        raise ValueError("Alert evidence must be numeric")
+
+    if not math.isfinite(value):
         raise ValueError("Alert evidence contains NaN or infinity")
 
     return value
@@ -88,8 +99,34 @@ def export_alerts(features, predictions, detector, output_path):
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    with output.open("w", encoding="utf-8") as file:
-        json.dump(result, file, indent=2, allow_nan=False)
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=output.parent,
+            prefix=f".{output.name}.",
+            suffix=".tmp",
+            delete=False
+        ) as file:
+            temp_path = Path(file.name)
+
+            json.dump(
+                result,
+                file,
+                indent=2,
+                allow_nan=False
+            )
+
+            file.flush()
+            os.fsync(file.fileno())
+
+        os.replace(temp_path, output)
+
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
     print(f"{detector}: exported {len(alerts)} alerts to {output}")
 
