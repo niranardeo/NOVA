@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 NORMAL_LABEL = "Normal Traffic"
 
 DETECTORS = {
@@ -44,8 +44,20 @@ def clean_value(value):
     return value
 
 
-def export_alerts(features, predictions, detector, output_path):
+def export_alerts(
+    features, predictions, detector, output_path,
+    run_id=None, dataset=None
+):
     """Export predicted attacks with their corresponding feature values."""
+
+    for field_name, value in (
+        ("run_id", run_id),
+        ("dataset", dataset),
+    ):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"{field_name} must be a non-empty string"
+            )
 
     if detector not in DETECTORS:
         raise ValueError(f"Unsupported detector: {detector}")
@@ -86,12 +98,15 @@ def export_alerts(features, predictions, detector, output_path):
 
         alerts.append({
             "alert_id": f"{prefix}-{row_number:06d}",
+            "record_id": f"val-{row_number:06d}",
             "predicted_class": str(prediction),
             "evidence": evidence,
         })
 
     result = {
         "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "dataset": dataset,
         "detector": detector,
         "alerts": alerts,
     }

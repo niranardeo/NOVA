@@ -12,11 +12,14 @@ Supported detectors:
 ## JSON Structure
 
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
+  "run_id": "validation-20261027T183300000000Z",
+  "dataset": "CICIDS2017",
   "detector": "random_forest",
   "alerts": [
     {
       "alert_id": "rf-000002",
+      "record_id": "val-000002",
       "predicted_class": "DoS",
       "evidence": {
         "Flow Duration": 200,
@@ -36,6 +39,12 @@ The example above is synthetic, not a real model prediction.
 - alert_id: Identifier unique within a detector's export.
 - predicted_class: Attack class predicted by the classifier.
 - evidence: Original feature values associated with the prediction.
+- run_id: Identifier shared by classifier exports from the same
+  validation execution. The notebook generates a UTC timestamp-based ID.
+- dataset: Name of the dataset used for the predictions.
+- record_id: One-based position of the record in the validation
+  dataset, formatted as val-000002. It is not an original
+  CICIDS2017 source-record identifier.
 
 ## Processing Rules
 
@@ -50,19 +59,46 @@ The example above is synthetic, not a real model prediction.
 9. The `Attack Type` column is rejected before processing predictions,
    including when no attack alerts are generated.
 10. Unapproved feature columns are excluded from the JSON output.
+11. run_id and dataset are required non-empty strings.
+12. Each exported alert includes a record_id corresponding to
+    its one-based validation dataset row position.
+13. Decision Tree and Random Forest exports from the same
+    validation execution share the same run_id and record_id
+    convention.
+14. Evidence values must be numeric, finite, and non-boolean.
+    Missing values, NaN, infinity, and numeric strings are rejected.
+15. JSON exports are written to a temporary file and atomically
+    replace the destination after successful serialization.
+16. If serialization fails, an existing destination file is
+    preserved and the temporary file is cleaned up.
 
 ## Current Limitations
 
-- Alert IDs are local to each export and may repeat across runs.
-- No confidence score is currently exported.
+## Current Limitations
+
+- Alert IDs are unique only within a detector export and may
+  repeat across validation runs. Use run_id, detector, and
+  alert_id together for traceability.
+- record_id represents the validation row position, not the
+  original CICIDS2017 source-record identifier.
+- No prediction confidence score is currently exported.
 - Evidence is restricted to a provisional allowlist:
-  `Flow Duration`, `Total Fwd Packets`, and `Flow Bytes/s`.
-- The final evidence allowlist must be reviewed against the
-  actual processed CICIDS2017 feature names.
-- Alert IDs are not globally unique across different export runs.
+  Flow Duration, Total Fwd Packets, and Flow Bytes/s.
+- Evidence units are not yet explicitly represented in the
+  JSON contract. This can cause incorrect AI explanations.
+- The evidence allowlist and units require confirmation
+  against the processed CICIDS2017 dataset.
+- Random Forest reproducibility across platforms requires
+  further investigation.
+- Potential training and validation data overlap requires
+  investigation before final performance claims.
+- Qwen testing identified unsupported statements, incorrect
+  evidence units, and hallucinated alerts from empty inputs.
+- Empty-alert handling and evidence-grounded explanations
+  require further integration testing.
 - Evidence privacy and data-sharing approval remain required.
-- The adapter has not yet been connected to live classifier outputs.
-- This contract is provisional until reviewed by the Qwen teammate.
+- The complete classifier-to-Qwen pipeline has not yet been
+  verified using schema version 1.1.
 
 ## Qwen Integration
 
@@ -96,6 +132,31 @@ Synthetic JSON alerts have been generated and validated.
 Actual CICIDS2017 model predictions have not yet been
 exported through this integration.
 
+### Current Integration Status
+
+NOVA uses Decision Tree and Random Forest classifiers to
+identify potentially malicious network traffic.
+
+The baseline notebook includes JSON export integration for
+both classifiers using src/alert_adapter.py.
+
+Independent Ubuntu validation confirmed successful exports
+from actual CICIDS2017 validation predictions:
+
+- Decision Tree: 63,465 alerts exported.
+- Random Forest: 63,324 alerts exported.
+- Exported alerts were matched to their source validation
+  rows with zero mismatches.
+- The baseline notebook executed successfully on Ubuntu.
+
+These results were obtained using the earlier alert contract.
+Schema version 1.1 introduces additional traceability metadata
+and stricter validation that still require end-to-end verification.
+
+Qwen3.5-4B has been tested separately using Ollama, but the
+complete classifier-to-Qwen integration has not yet been
+verified end to end.
+
 ### JSON Files for Qwen
 
 Decision Tree:
@@ -117,7 +178,23 @@ approved network-flow evidence.
 6. Preserve alert IDs for traceability.
 7. Handle empty alert lists correctly.
 
-### Current Limitations
+### Remaining Qwen Integration Work
 
-The Qwen integration has not yet been implemented or tested.
-The final input and response formats require team agreement.
+The complete classifier-to-Qwen pipeline has not yet been
+verified end to end using schema version 1.1.
+
+The final Qwen response format requires team agreement.
+
+Before final integration, the team must verify that Qwen:
+
+- Handles empty alert lists without inventing attacks.
+- Uses only evidence provided in the input JSON.
+- Does not invent missing feature values or confidence scores.
+- Interprets network-flow feature units correctly.
+- Preserves run_id, detector, record_id, and alert_id
+  for traceability.
+- Clearly distinguishes predicted attacks from confirmed
+  security incidents.
+
+See the main Current Limitations section for outstanding
+classifier, dataset, and evidence-quality concerns.

@@ -22,6 +22,9 @@ class TestAlertAdapter(unittest.TestCase):
             "Total Fwd Packets": [5, 10, 20]
         })
 
+        self.run_id = "validation-20261026-001"
+        self.dataset = "CICIDS2017"
+
     def test_decision_tree_alerts(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "dt.json"
@@ -30,7 +33,9 @@ class TestAlertAdapter(unittest.TestCase):
                 self.features,
                 ["Normal Traffic", "DoS", "Normal Traffic"],
                 "decision_tree",
-                output
+                output,
+                run_id=self.run_id,
+                dataset=self.dataset
             )
 
             self.assertEqual(len(result["alerts"]), 1)
@@ -43,7 +48,9 @@ class TestAlertAdapter(unittest.TestCase):
                 self.features,
                 ["Normal Traffic", "DoS", "PortScan"],
                 "random_forest",
-                Path(folder) / "rf.json"
+                Path(folder) / "rf.json",
+                run_id=self.run_id,
+                dataset=self.dataset
             )
 
             self.assertEqual(len(result["alerts"]), 2)
@@ -99,7 +106,9 @@ class TestAlertAdapter(unittest.TestCase):
                     features,
                     ["DoS"],
                     "random_forest",
-                    Path(folder) / "alert.json"
+                    Path(folder) / "alert.json",
+                    run_id=self.run_id,
+                    dataset=self.dataset
                 )
 
         features = features.drop(columns=["Attack Type"])
@@ -109,7 +118,9 @@ class TestAlertAdapter(unittest.TestCase):
                 features,
                 ["DoS"],
                 "random_forest",
-                Path(folder) / "alert.json"
+                Path(folder) / "alert.json",
+                run_id=self.run_id,
+                dataset=self.dataset
             )
 
             evidence = result["alerts"][0]["evidence"]
@@ -134,7 +145,9 @@ class TestAlertAdapter(unittest.TestCase):
                     features,
                     ["Normal Traffic"],
                     "decision_tree",
-                    output
+                    output,
+                    run_id=self.run_id,
+                    dataset=self.dataset
                 )
 
             self.assertFalse(output.exists())
@@ -194,13 +207,63 @@ class TestAlertAdapter(unittest.TestCase):
                         self.features,
                         ["Normal Traffic", "DoS", "Normal Traffic"],
                         "decision_tree",
-                        output
+                        output,
+                        run_id=self.run_id,
+                        dataset=self.dataset
                     )
 
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 original
             )
+
+    def test_alert_traceability_fields(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = export_alerts(
+                self.features,
+                ["Normal Traffic", "DoS", "Normal Traffic"],
+                "decision_tree",
+                Path(folder) / "alerts.json",
+                run_id="validation-20261026-001",
+                dataset="CICIDS2017"
+            )
+
+            self.assertEqual(
+                result["run_id"],
+                "validation-20261026-001"
+            )
+            self.assertEqual(result["dataset"], "CICIDS2017")
+            self.assertEqual(
+                result["alerts"][0]["record_id"],
+                "val-000002"
+            )
+
+    def test_invalid_traceability_metadata_rejected(self):
+        invalid_cases = [
+            (None, "CICIDS2017"),
+            ("", "CICIDS2017"),
+            ("   ", "CICIDS2017"),
+            ("validation-20261026-001", None),
+            ("validation-20261026-001", ""),
+            ("validation-20261026-001", "   "),
+        ]
+
+        for run_id, dataset in invalid_cases:
+            with self.subTest(run_id=run_id, dataset=dataset):
+                with tempfile.TemporaryDirectory() as folder:
+                    output = Path(folder) / "invalid.json"
+
+                    with self.assertRaises(ValueError):
+                        export_alerts(
+                            self.features,
+                            ["Normal Traffic", "DoS", "Normal Traffic"],
+                            "decision_tree",
+                            output,
+                            run_id=run_id,
+                            dataset=dataset
+                        )
+
+                    self.assertFalse(output.exists())
 
 if __name__ == "__main__":
     unittest.main()
