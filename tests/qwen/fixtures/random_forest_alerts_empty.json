@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.1",
+  "run_id": "validation-20261030T000000000000Z",
+  "dataset": "CICIDS2017",
+  "detector": "random_forest",
+  "alerts": []
+}

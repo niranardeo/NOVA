@@ -1,0 +1,14 @@
+# Keep build contexts small and free of data, models, outputs and local environments.
+.git
+.venv
+venv
+**/__pycache__
+.pytest_cache
+data
+outputs
+*.csv
+*.ipynb_checkpoints
+# secrets (same as .gitignore), at any depth
+**/.env
+**/*.key
+**/*.pem

@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.1",
+  "run_id": "validation-20261030T000000000000Z",
+  "dataset": "CICIDS2017",
+  "detector": "random_forest",
+  "alerts": [
+    {
+      "alert_id": "rf-000002",
+      "record_id": "val-000002",
+      "predicted_class": "DoS",
+      "evidence": {
+        "Flow Duration": 101041626.0,
+        "Total Fwd Packets": 11.0,
+        "Flow Bytes/s": 123.7509776
+      }
+    },
+    {
+      "alert_id": "rf-000003",
+      "record_id": "val-000003",
+      "predicted_class": "Port Scanning",
+      "evidence": {
+        "Flow Duration": 67.0,
+        "Total Fwd Packets": 1.0,
+        "Flow Bytes/s": 119402.9851
+      }
+    },
+    {
+      "alert_id": "rf-000004",
+      "record_id": "val-000004",
+      "predicted_class": "DoS",
+      "evidence": {
+        "Flow Duration": 21760.0,
+        "Total Fwd Packets": 1.0,
+        "Flow Bytes/s": 91130.51471
+      }
+    },
+    {
+      "alert_id": "rf-000006",
+      "record_id": "val-000006",
+      "predicted_class": "Brute Force",
+      "evidence": {
+        "Flow Duration": 5000000.0,
+        "Total Fwd Packets": 20.0,
+        "Flow Bytes/s": 2400.5
+      }
+    },
+    {
+      "alert_id": "rf-000008",
+      "record_id": "val-000008",
+      "predicted_class": "Bots",
+      "evidence": {
+        "Flow Duration": 116827162.0,
+        "Total Fwd Packets": 2.0,
+        "Flow Bytes/s": 0.154073759
+      }
+    }
+  ]
+}

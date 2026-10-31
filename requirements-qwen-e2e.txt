@@ -1,0 +1,10 @@
+# Full classifier -> alert adapter -> Qwen run (scripts/qwen_e2e_from_notebook.py), which executes
+# notebooks/03_baseline_model_development_Oct_06_2026_Jennifer.ipynb headlessly.
+#   python -m pip install -r requirements-qwen-e2e.txt
+-r requirements-qwen-dev.txt
+scikit-learn==1.9.0
+matplotlib==3.11.2
+nbconvert==7.17.2
+nbformat==5.11.1
+ipykernel==7.4.0
+jupyter_client==8.10.0
