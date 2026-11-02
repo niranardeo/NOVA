@@ -58,22 +58,26 @@ class TestAlertAdapter(unittest.TestCase):
 
     def test_invalid_detector(self):
         with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "Unsupported detector"):
                 export_alerts(
                     self.features,
                     ["DoS"] * 3,
                     "unknown",
-                    Path(folder) / "invalid.json"
+		    Path(folder) / "invalid.json",
+		    run_id=self.run_id,
+	            dataset=self.dataset
                 )
 
     def test_mismatched_rows(self):
         with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "Features and predictions must have matching rows"):
                 export_alerts(
                     self.features,
                     ["DoS"],
                     "decision_tree",
-                    Path(folder) / "invalid.json"
+                    Path(folder) / "invalid.json",
+                    run_id=self.run_id,
+                    dataset=self.dataset
                 )
 
     def test_missing_or_infinite_evidence(self):
@@ -84,12 +88,14 @@ class TestAlertAdapter(unittest.TestCase):
                         "Flow Duration": [invalid_value]
                     })
 
-                    with self.assertRaises(ValueError):
+                    with self.assertRaisesRegex(ValueError, ("missing values" if pd.isna(invalid_value) else "NaN or infinity")):
                         export_alerts(
                             features,
                             ["DoS"],
                             "random_forest",
-                            Path(folder) / "invalid.json"
+                            Path(folder) / "invalid.json",
+                            run_id=self.run_id,
+                            dataset=self.dataset
                         )
 
     def test_unapproved_evidence_excluded(self):
@@ -161,12 +167,14 @@ class TestAlertAdapter(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "invalid.json"
 
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "Alert evidence contains missing values"):
                 export_alerts(
                     features,
                     ["DoS"],
                     "decision_tree",
-                    output
+                    output,
+                    run_id=self.run_id,
+                    dataset=self.dataset
                 )
 
             self.assertFalse(output.exists())
@@ -182,12 +190,14 @@ class TestAlertAdapter(unittest.TestCase):
 
                     output = Path(folder) / "invalid.json"
 
-                    with self.assertRaises(ValueError):
+                    with self.assertRaisesRegex(ValueError, "Alert evidence must be numeric"):
                         export_alerts(
                             features,
                             ["DoS"],
                             "decision_tree",
-                            output
+                            output,
+                            run_id=self.run_id,
+                            dataset=self.dataset
                         )
 
                     self.assertFalse(output.exists())
