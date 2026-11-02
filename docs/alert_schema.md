@@ -83,8 +83,13 @@ The example above is synthetic, not a real model prediction.
 - No prediction confidence score is currently exported.
 - Evidence is restricted to a provisional allowlist:
   Flow Duration, Total Fwd Packets, and Flow Bytes/s.
-- Evidence units are not yet explicitly represented in the
-  JSON contract. This can cause incorrect AI explanations.
+- Evidence units are not encoded as separate fields in the
+  JSON contract. Downstream consumers must interpret:
+  - Flow Duration: microseconds (µs), not seconds.
+  - Total Fwd Packets: packet count.
+  - Flow Bytes/s: bytes per second.
+  These interpretations should be confirmed against the
+  V3 preprocessing documentation before final integration.
 - The evidence allowlist and units require confirmation
   against the processed CICIDS2017 dataset.
 - Random Forest reproducibility across platforms requires
