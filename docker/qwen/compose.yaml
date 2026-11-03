@@ -1,11 +1,16 @@
-# Optional Docker setup: Ollama + the Qwen consumer on a private network. From the repository root:
+# Optional Docker setup: Ollama + the Qwen consumer on a private network. From the repository root.
+# Start Ollama:
 #   docker compose -f docker/qwen/compose.yaml up -d ollama
-#   docker compose -f docker/qwen/compose.yaml exec ollama ollama pull qwen3.5:4b-q4_K_M      # ~3.3 GB, once
-#   docker compose -f docker/qwen/compose.yaml run --rm qwen                                  # offline tests
+# Pull the model once (about 3.3 GB):
+#   docker compose -f docker/qwen/compose.yaml exec ollama ollama pull qwen3.5:4b-q4_K_M
+# Offline tests:
+#   docker compose -f docker/qwen/compose.yaml run --rm qwen
+# Live smoke test (on Linux, add --user "$(id -u):$(id -g)" so outputs/ stays yours):
 #   docker compose -f docker/qwen/compose.yaml run --rm qwen python scripts/qwen_smoke.py --live
-#   docker compose -f docker/qwen/compose.yaml run --rm -e NOVA_QWEN_LIVE=1 qwen \
-#       python -m pytest -p no:cacheprovider -v tests/qwen_live
-#   docker compose -f docker/qwen/compose.yaml down        # keeps the model volume
+# Live suite:
+#   docker compose -f docker/qwen/compose.yaml run --rm -e NOVA_QWEN_LIVE=1 qwen python -m pytest -p no:cacheprovider -v tests/qwen_live
+# Stop (keeps the model volume):
+#   docker compose -f docker/qwen/compose.yaml down
 # CPU-only. Give Docker at least 8 GB of memory (the model plus an 8K context uses about 5 GB).
 name: nova-qwen
 services:
@@ -24,7 +29,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/qwen/Dockerfile
-    image: nova-qwen:0.1
+    image: nova-qwen:0.2
     depends_on:
       ollama:
         condition: service_healthy

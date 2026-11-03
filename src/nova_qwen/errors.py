@@ -57,6 +57,27 @@ class IncompatibleExports(NovaQwenError):
     code = "INCOMPATIBLE_EXPORTS"
 
 
+class LargeRunNotAuthorized(NovaQwenError):
+    """More alerts were selected than an unattended run may send to the model."""
+
+    code = "LARGE_RUN_NOT_AUTHORIZED"
+
+
+# ----------------------------------------------------------------------------- dataset
+class DatasetError(NovaQwenError):
+    """A dataset file cannot be used for this run."""
+
+    code = "DATASET_ERROR"
+
+
+class DatasetMissing(DatasetError):
+    code = "DATASET_MISSING"
+
+
+class ReservedSplitRefused(DatasetError):
+    code = "RESERVED_SPLIT_REFUSED"
+
+
 # ----------------------------------------------------------------------------- config
 class ConfigError(NovaQwenError):
     code = "CONFIG_ERROR"

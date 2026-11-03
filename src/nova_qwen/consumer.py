@@ -12,7 +12,7 @@ from pathlib import Path
 from . import __version__
 from .alerts import AlertExport
 from .config import QwenSettings
-from .errors import NovaQwenError, OllamaError, PromptBudgetExceeded, ResumeMismatch
+from .errors import LargeRunNotAuthorized, NovaQwenError, OllamaError, PromptBudgetExceeded, ResumeMismatch
 from .features import data_quality_notes, normalize_evidence
 from .output import OUTPUT_SCHEMA, OUTPUT_SCHEMA_VERSION, load_results, utc_now, write_json_atomic
 from .prompt import (PROMPT_VERSION, RESPONSE_SCHEMA_VERSION, build_messages, check_budget, feedback_message,
@@ -23,6 +23,7 @@ MAX_RAW_CHARS = 32000  # far above any answer the validator accepts (~6 KB); see
 PREDICTION_STATUS = "unverified classifier prediction"
 TRANSPORT_CODES = ("OLLAMA_UNAVAILABLE", "OLLAMA_TIMEOUT", "OLLAMA_HTTP_ERROR", "OLLAMA_PROTOCOL_ERROR")
 FINGERPRINT_SETTINGS = ("model", "think", "temperature", "seed", "num_ctx", "num_predict", "max_attempts")
+MAX_UNCONFIRMED_ALERTS = 25  # about 10 minutes on CPU; more needs an explicit --allow-large-run
 
 
 class RunAborted(OllamaError):
@@ -163,14 +164,32 @@ def _reusable(old_result: dict, fresh: dict) -> dict | None:
             "attempts": old_result.get("attempts") or []}
 
 
+def _identity_rank(provenance: dict) -> tuple:
+    """How much a provenance block establishes: a verified hash, then a profile match, then a hashed file."""
+    return bool(provenance.get("verified")), bool(provenance.get("v3_profile_matched")), bool(provenance.get("validation_sha256"))
+
+
+def _resumed_provenance(stored: dict, provenance: dict | None) -> dict:
+    """One label covers the whole file, so it says what THIS caller established and cannot exceed the run's own verdict.
+    A stronger earlier identity is kept beside it, for the answers generated under it."""
+    mine = provenance or {"dataset_version": stored.get("dataset_version"), "verified": False}
+    earlier = max(stored, stored.get("previous_provenance") or {}, key=_identity_rank)
+    if _identity_rank(earlier) <= _identity_rank(mine):
+        return mine
+    return {**mine, "previous_provenance": {k: v for k, v in earlier.items() if k != "previous_provenance"}}
+
+
 def run(export: AlertExport, settings: QwenSettings, output_path, *, client=None, limit: int | None = 10,
         offset: int = 0, alert_ids=None, resume: bool = False, selection_from_previous: bool = False,
-        progress=None) -> dict:
+        progress=None, max_alerts: int | None = None, provenance: dict | None = None, check_only: bool = False) -> dict:
     """Process the selected alerts of one export and write the results file (checkpointed per alert).
 
     resume=True continues ``output_path`` for the SAME export, selection and settings. With
     selection_from_previous=True the selection is taken from that file (what the CLI does when no
-    selection flag is given); otherwise a different selection is refused, never silently narrowed."""
+    selection flag is given); otherwise a different selection is refused, never silently narrowed.
+    max_alerts refuses a larger selection before the model is contacted. provenance (dataset identity from the
+    caller) is recorded as given; the results file does not establish it. check_only raises what this call would
+    refuse, then returns without writing anything or sending a prompt."""
     old = None
     if resume and Path(output_path).exists():
         old = load_results(output_path)
@@ -180,11 +199,22 @@ def run(export: AlertExport, settings: QwenSettings, output_path, *, client=None
             prev = old["selection"]
             limit, offset, alert_ids = prev.get("limit"), prev.get("offset") or 0, prev.get("alert_ids")
     alerts, selection = select_alerts(export, limit=limit, offset=offset, alert_ids=alert_ids)
+    if max_alerts is not None and len(alerts) > max_alerts:
+        raise LargeRunNotAuthorized(
+            f"{len(alerts)} alerts selected from {export.file_name} (about {len(alerts) * 25 / 3600:.1f} hours on CPU); "
+            f"the limit without --allow-large-run is {max_alerts}. Select fewer alerts, or pass --allow-large-run if "
+            f"this is intended.", details={"selected": len(alerts), "limit": max_alerts})
     if old is not None:
         prev = {k: old["selection"].get(k) for k in ("mode", "alert_ids", "offset", "limit")}
         if prev != selection:
             raise ResumeMismatch(f"cannot resume with a different selection: previous {prev}, now {selection}. "
                                  f"Run --resume without selection flags to continue the previous one.")
+        stored = old.get("provenance")
+        wanted = (provenance or {}).get("dataset_version")
+        if wanted is not None and stored is not None and wanted != stored.get("dataset_version"):
+            raise ResumeMismatch(f"cannot resume with a different dataset identity: previous {stored}, now {provenance}")
+        if stored is not None:
+            provenance = _resumed_provenance(stored, provenance)
     selection["selected"] = len(alerts)
     doc = {
         "output_schema": OUTPUT_SCHEMA,
@@ -195,6 +225,7 @@ def run(export: AlertExport, settings: QwenSettings, output_path, *, client=None
         "created_utc": (old or {}).get("created_utc") or utc_now(),
         "updated_utc": None,
         "source": export.source_record(),
+        "provenance": provenance,
         "selection": selection,
         "model": {"contacted": False, "name": settings.model, "digest": None, "settings": settings.to_record()},
         "summary": None,
@@ -205,6 +236,9 @@ def run(export: AlertExport, settings: QwenSettings, output_path, *, client=None
         previous = {r.get("alert_id"): r for r in old["results"] if isinstance(r, dict)}
         doc["resumed_from"] = {"previous_updated_utc": old.get("updated_utc"), "reused_results": 0,
                                "previous_fingerprint": fingerprint(old)}
+
+    if check_only and (old is None or not alerts):
+        return doc
 
     if not alerts:
         # Nothing to explain: never contact Ollama, never invent an alert.
@@ -221,6 +255,8 @@ def run(export: AlertExport, settings: QwenSettings, output_path, *, client=None
         if fingerprint(doc) != doc["resumed_from"]["previous_fingerprint"]:
             raise ResumeMismatch(f"cannot resume with a different model, version or settings: previous "
                                  f"{doc['resumed_from']['previous_fingerprint']}, now {fingerprint(doc)}")
+    if check_only:
+        return doc
     send_think = (not info.capabilities) or ("thinking" in info.capabilities)
 
     def keep_unreached_previous():

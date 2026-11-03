@@ -6,6 +6,9 @@ bounded run over every fixture alert of both classifiers. Structural/determinist
 semantic quality needs human review (python -m src.nova_qwen worksheet ...).
 """
 import json
+import os
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -93,3 +96,31 @@ def test_timeout_is_reported_not_hung(live_settings):
     export = load_export(DT)
     r = explain_alert(OllamaClient(s), export, export.alerts[1], s)
     assert r["status"] == "failed" and r["error"]["code"] == "OLLAMA_TIMEOUT"
+
+
+def test_production_e2e_script_on_the_synthetic_demo(live_settings, tmp_path):
+    """The real scripts, real model, SYNTHETIC data: generator -> adapter -> selection -> Qwen -> verify -> worksheet."""
+    root = Path(__file__).resolve().parents[2]
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "NOVA_OLLAMA_URL": live_settings.url}
+
+    def script(name, *args, timeout=900):
+        return subprocess.run([sys.executable, str(root / "scripts" / name), *map(str, args)], cwd=root, env=env,
+                              capture_output=True, text=True, timeout=timeout)
+
+    r = script("qwen_make_synthetic_demo.py", "--out-dir", tmp_path, "--train-rows", 100, "--validation-rows", 300)
+    assert r.returncode == 0, r.stderr
+    r = script("qwen_export_v3_alerts.py", "--validation", tmp_path / "synthetic_validation.csv", "--dt-predictions",
+               tmp_path / "dt_predictions.txt", "--rf-predictions", tmp_path / "rf_predictions.txt", "--dataset",
+               "SYNTHETIC-NOT-CICIDS2017", "--dataset-version", "SYNTHETIC-DEMO", "--out-dir", tmp_path)
+    assert r.returncode == 0, r.stderr
+    r = script("qwen_e2e_from_notebook.py", "--skip-notebook", "--dataset-version", "SYNTHETIC-DEMO", "--validation",
+               tmp_path / "synthetic_validation.csv", "--exports-dir", tmp_path, "--out-dir", tmp_path / "e2e", "--limit", 1)
+    assert r.stdout.strip().splitlines()[-1].endswith("(NOT a verified V3 run)"), r.stdout + r.stderr
+    summary = json.loads((tmp_path / "e2e" / "summary.json").read_text())
+    assert summary["dataset"]["real_v3_verified"] is False and summary["dataset"]["declared_version"] == "SYNTHETIC-DEMO"
+    assert summary["dataset"]["alignment"]["decision_tree"]["passed"]
+    for det in ("decision_tree", "random_forest"):
+        outcome = summary["classifiers"][det]["outcome"]
+        assert outcome["counts"]["failed"] == 0 and outcome["counts"]["selected"] == 1 and outcome["verified"]
+        assert summary["classifiers"][det]["model"] == live_settings.expected_digest
+    assert summary["review_worksheet"]

@@ -1,14 +1,20 @@
 # NOVA Qwen Integration (`src/nova_qwen`)
 
-Owner: Paul (Qwen developer). Status: **ready for independent team testing**. The response format is
-**provisional** until the team approves it (see "What is provisional"). Team testing guide: see the release
-notes that accompany the branch; quick start below.
+Owner: Paul (Qwen developer). Status: **ready for independent team testing on the V3 workflow; real V3 end-to-end
+verification is waiting on real V3 exports** (see `docs/qwen_v3_integration_results.md`). The response format is
+**provisional** until the team approves it (see "What is provisional").
+
+Team documents: testing guide `docs/qwen_testing_guide.md`, review rubric `docs/qwen_review_rubric.md`, walkthrough
+`docs/qwen_integration_walkthrough.md`, V3 results `docs/qwen_v3_integration_results.md`, open requests
+`docs/qwen_v3_team_requests.md`.
 
 ```
-processed CICIDS2017 features
-  -> Decision Tree / Random Forest            (notebooks/03_..._Jennifer.ipynb, unchanged)
+CICIDS2017 V3 validation CSV (complete, in file order)
+  -> Decision Tree / Random Forest predictions (Jenn's classifier work, unchanged)
   -> schema 1.1 alert exports                 (src/alert_adapter.py, unchanged)
        outputs/decision_tree_alerts.json, outputs/random_forest_alerts.json
+  -> dataset and row-alignment checks         (no model involved)
+  -> a small representative sample            (the full export is never sent to Ollama)
   -> Qwen consumer                            (src/nova_qwen)
        strict 1.1 validation -> unit normalisation in Python -> one alert per request
        -> Ollama /api/chat (qwen3.5:4b-q4_K_M, JSON-schema constrained) -> deterministic answer checks
@@ -22,13 +28,13 @@ processed CICIDS2017 features
 | Python | **3.12 or 3.13** recommended and tested (macOS 3.13.7; Ubuntu 24.04 3.12.3; Debian `python:3.12-slim` (x86-64) and `python:3.13-slim` (arm64)). The tests and the notebook need **≥ 3.11** (pandas 3.0.3). The consumer itself uses only the standard library. macOS's built-in `/usr/bin/python3` (3.9) is too old; install 3.12 or 3.13, e.g. from python.org or `brew install python@3.12`. |
 | Ollama | 0.40.11 tested (`ollama/ollama@sha256:dea72d1e…`). Native install (https://ollama.com/download) or the Docker setup in `docker/qwen/`. |
 | Model | `qwen3.5:4b-q4_K_M`, digest `d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04` (about 3.3 GB on disk; the pull's main layer is 2.6 GB). |
-| Memory | At least 8 GB free for the model with an 8K context (about 5 GB was observed in use). The one-step notebook-plus-Qwen run needs about 12 GB free (notebook about 5 GB plus model about 5 GB); otherwise use the two-step mode. |
-| Speed | CPU-only: about 20–30 s per alert in a 14-vCPU Linux VM. `--all` on one classifier's ~63k alerts would take **weeks** on CPU; use `--limit` or `--alert-id`. |
-| Data | Only for the end-to-end run: the approved `training_dataset_CIC_70.csv` and `validation_dataset_CIC_15.csv` in `data/processed/`. **Never put the reserved test split there.** |
+| Memory | At least 8 GB free for the model with an 8K context (about 5 GB was observed in use). Notebook 03 as committed needs about 6 GB; together with the model, about 12 GB. If that is too much, stop Ollama, run `--notebook-only`, start Ollama, then run `--skip-notebook`. In Docker, set the memory limit accordingly. |
+| Speed | CPU-only: about 20–30 s per alert in a 14-vCPU Linux VM. One classifier's ~63k alerts would take **weeks** on CPU, so more than 25 alerts in a run needs `--allow-large-run`. |
+| Data | Only for the end-to-end run: the approved `cicids2017_V3_train_70.csv` and `cicids2017_V3_validation_15.csv`, in a folder holding only those files. **Never put `cicids2017_V3_test_RESERVED_15.csv` there**; the tools refuse test and reserved file names. |
 
 ## Setup (macOS / Ubuntu)
 
-Run these from the repository root. Create a virtual environment with Python 3.12 or 3.13 (use whichever is installed; `python3 --version` must not show 3.9 or 3.10).
+Run these from the repository root. Check your Python first: `python3 --version` must show 3.11 or newer (3.12 and 3.13 are tested). If it shows 3.9 or 3.10, install a newer Python and use that in the command below.
 
 **Ubuntu / WSL2 only:** the `venv` module is a separate package. Install it first (Ubuntu 24.04's `python3` is 3.12):
 
@@ -36,10 +42,10 @@ Run these from the repository root. Create a virtual environment with Python 3.1
 sudo apt install python3 python3-venv
 ```
 
-Create the environment (on Ubuntu use `python3 -m venv .venv`; on macOS `python3.13` or `python3.12`):
+Create the environment:
 
 ```bash
-python3.13 -m venv .venv
+python3 -m venv .venv
 ```
 
 Activate it:
@@ -127,7 +133,8 @@ python -m src.nova_qwen worksheet outputs/qwen/decision_tree_explanations.json o
 
 Other `explain` options:
 - `--offset N` skips the first N alerts. It cannot be combined with `--alert-id`, and an offset past the end is refused.
-- `--all` explains every alert.
+- `--all` explains every alert. A run selecting more than 25 alerts is refused before the model is contacted unless you also pass `--allow-large-run`; this applies to `--limit`, `--all`, `--alert-id` and resumed runs.
+- `--dataset-version V3` records that version in the results file as declared and unverified. `scripts/qwen_e2e_from_notebook.py` records what its checks established.
 - `--overwrite` replaces an existing results file.
 - `--strict` exits 1 if any answer was rejected.
 - `--max-attempts`, `--retries`, `--timeout`, `--num-ctx`, `--num-predict` and `--seed` override the settings.
@@ -143,9 +150,9 @@ Exit codes:
 
 | Code | Meaning |
 |---|---|
-| 0 | Success |
-| 1 | `verify` failed, an alert failed, or (with `--strict`) an answer was rejected |
-| 2 | Invalid input, arguments, results file or resume request |
+| 0 | Finished with nothing in row 1. For `explain` this does not mean every answer was accepted: rejected answers still exit 0 unless you pass `--strict`, so read `summary` |
+| 1 | `verify`, `check-dataset` or `check-alignment` failed, an alert failed, or (with `--strict`) an answer was rejected |
+| 2 | Invalid input, arguments, results file or resume request; a missing dataset file; an unreachable input path; a refused test split; a selection above the limit |
 | 3 | Ollama or model problem: unavailable, model missing, digest mismatch, or `RUN_ABORTED` (3 consecutive alerts could not reach the model; the file is kept as `interrupted`, so fix Ollama and use `--resume`) |
 | 4 | Output problem: would overwrite an input or a file this tool did not write, file exists (use `--overwrite` or `--resume`), or the write failed |
 | 130 | Interrupted (Ctrl-C). Partial results are kept with `run_status: "interrupted"`; use `--resume`. |
@@ -200,25 +207,29 @@ These are **warnings**, kept for human review: other attack classes mentioned, a
 
 **Passing these checks does not prove an explanation is correct or useful.** A false statement phrased without
 numbers, units or forbidden wording can pass, for example calling a packet *count* a *rate*. Semantic quality
-must be judged by people with `worksheet` and its rubric. The rubric is *adapted from* the team's
-`docs/qwen_evaluation_criteria.md`, not a one-to-one copy (its header line says "maps to"): H1 and H6 are scored 0–2 and
-H2–H5 0–1, and it has no prioritization or consistency criterion. Report each column separately rather than one average.
+must be judged by people with `worksheet` and `docs/qwen_review_rubric.md`. The worksheet uses the five criteria of
+`docs/qwen_evaluation_criteria.md`, each 0–2. Prioritization stays `N/A` until a policy is approved, so totals are out of 8.
+Report each column separately rather than one average.
 
 ## Results file (`nova-qwen-explanations`, version `0.1.0-provisional`)
 
-Abbreviated example. A real file also contains `model.capabilities/expected_digest/family/parameter_size/size_bytes`,
+Abbreviated, illustrative example of the file's shape, not a V3 result: no real V3 run exists yet, and the sample values come from an older pre-V3 export. A real file also contains `model.capabilities/expected_digest/family/parameter_size/size_bytes`,
 all `model.settings`, and per attempt `model`, `done`, `wall_seconds`, `total_duration_seconds`,
 `load_duration_seconds`, `thinking_chars` and `raw_truncated`. Rejected results add `rejected_response`, and
-resumed runs add a top-level `resumed_from`.
+resumed runs add a top-level `resumed_from`. `provenance` records the dataset identity this run's caller established (null if
+none was given or stored). A resume that establishes less keeps the earlier, stronger identity in
+`provenance.previous_provenance`. `source.dataset` is copied from the export and is not proof of the version: the notebook writes
+`CICIDS2017` regardless of the file it read.
 
 ```json
 {
   "output_schema": "nova-qwen-explanations", "output_schema_version": "0.1.0-provisional",
-  "generator": {"component": "nova_qwen", "version": "0.1.0", "prompt_version": "nova-qwen-prompt-1.0",
+  "generator": {"component": "nova_qwen", "version": "0.2.0", "prompt_version": "nova-qwen-prompt-1.0",
                 "response_schema_version": "nova-qwen-response-0.1-provisional"},
   "run_status": "complete", "created_utc": "...", "updated_utc": "...",
   "source": {"file_name": "decision_tree_alerts.json", "sha256": "...", "size_bytes": 15504498, "schema_version": "1.1",
              "run_id": "validation-...Z", "dataset": "CICIDS2017", "detector": "decision_tree", "alert_count": 63465},
+  "provenance": {"dataset_version": "V2-LEGACY-REGRESSION", "verified": false, "v3_profile_matched": false, "validation_sha256": "..."},
   "selection": {"mode": "range", "alert_ids": null, "offset": 0, "limit": 1, "selected": 1},
   "model": {"contacted": true, "name": "qwen3.5:4b-q4_K_M", "digest": "d8b0f5e9...", "digest_verified": true,
             "ollama_version": "0.40.11", "quantization": "Q4_K_M", "settings": {"num_ctx": 8192, "seed": 42}},
@@ -254,7 +265,8 @@ Results are written atomically after **every** alert, with normal file permissio
 
 - **Response fields:** `observations`, `explanation`, `limitations`, `evidence_used`, `priority`, `abstain`, adapted from the "Suggested response fields" in `docs/alert_schema.md`. `alert_id` and the other identifiers are attached in code.
 - **Priority:** `priority` is always `null`, because **no priority policy has been approved**. None is invented.
-- **Evidence allowlist and units:** the 3-feature allowlist is the adapter's provisional allowlist. Units follow CICFlowMeter conventions (Flow Duration in microseconds).
+- **Evidence allowlist and units:** the 3-feature allowlist is the adapter's provisional allowlist. Units follow CICFlowMeter conventions and `docs/alert_schema.md` (Flow Duration in microseconds, Total Fwd Packets as a count, Flow Bytes/s in bytes per second). `check-dataset` tests whether a file is consistent with them, but that is plausibility, not proof: **the V3 unit assumption still needs the team's confirmation.**
+- **Dataset field value:** `CICIDS2017-V3` is recommended, pending team approval. The consumer accepts any clean non-empty value and does not rewrite it.
 - **Rules and prompt:** the deterministic rejection rules and the prompt (`nova-qwen-prompt-1.0`).
 - **Consumer-side tightening:** the reader is stricter than the adapter. It rejects `run_id`/`dataset` with surrounding whitespace or control characters, non-canonical IDs, unknown classes and values above 1e15.
 
@@ -262,12 +274,16 @@ Results are written atomically after **every** alert, with normal file permissio
 
 - **Network:** alert evidence is sent only to the configured Ollama URL. It must be loopback unless explicitly allowed. URLs with credentials, paths, port 0 or invalid ports, or other schemes are refused.
 - **HTTP behaviour:** no proxy environment variables are used, redirects are not followed, every request has an overall wall-clock deadline (a watchdog closes the socket), responses are size-limited and must be strict JSON with the documented field types, and error text is capped.
-- **Ground truth:** labels are never read. The reader rejects any field outside the 1.1 contract, including `ground_truth` or `Attack Type`.
-- **Files:** the `explain` and `worksheet` commands never overwrite an input export, a file they did not write, or (without `--overwrite`) an existing results file or review worksheet. Worksheet cells are neutralised against spreadsheet formula injection. Exception: `scripts/qwen_e2e_from_notebook.py` regenerates its own `outputs/qwen_e2e/*_explanations.json`, `correlation.json` and `summary.json` on every run; it never overwrites an existing worksheet (a re-run writes `review_worksheet_<timestamp>.csv`, named in `summary.json` → `review_worksheet`).
+- **Ground truth:** the consumer never reads labels. The reader rejects any field outside the 1.1 contract, including `ground_truth` or `Attack Type`. `check-dataset` counts labels in the files it is given, to identify them; `scripts/qwen_export_v3_alerts.py` reads labels only to compute the manifest's metrics. Neither passes labels to an export or to the model.
+- **Reserved test split:** every dataset, export, results and output path is checked by name, and through symlinks, before the file is touched. Device paths such as `/dev/stdin` are refused too, because they hide the file's name. A renamed copy cannot be caught by name; V3's class counts differ between validation and the reserved split, so `check-dataset` catches it afterwards, but it will have been read. Keep it out of your working folders.
+- **Model files:** `scripts/qwen_export_v3_alerts.py --dt-model/--rf-model` loads joblib or pickle files, which can run code. It requires `--trust-model-files`; use only models you made yourself. `.npy` predictions are loaded without pickle.
+- **Files:** the `explain` and `worksheet` commands never overwrite an input export, a file they did not write, or (without `--overwrite`) an existing results file or review worksheet. Worksheet cells are neutralised against spreadsheet formula injection. Exception: `scripts/qwen_e2e_from_notebook.py` regenerates its own `*_explanations.json`, `correlation.json` and `summary.json` on every run, and in notebook mode its executed notebook and `notebook_run.json`; it never overwrites an existing worksheet or rubric file (a re-run writes `review_worksheet_<timestamp>.csv` and its `.rubric.txt`, named in `summary.json` → `review_worksheet`).
 
 ## Testing
 
-Offline tests (no Ollama; about 15 s):
+Step-by-step instructions and expected results are in `docs/qwen_testing_guide.md`.
+
+Offline tests (no Ollama; about 2 minutes):
 
 ```bash
 python -m pytest -p no:cacheprovider -q tests/qwen
@@ -285,52 +301,67 @@ Smoke test against your Ollama:
 python scripts/qwen_smoke.py --live
 ```
 
-Live suite (about 8–15 minutes on CPU):
+Live suite (about 10–15 minutes on CPU):
 
 ```bash
 NOVA_QWEN_LIVE=1 python -m pytest -p no:cacheprovider -v tests/qwen_live
 ```
 
-### End-to-end: classifier → adapter → Qwen
+### The V3 workflow: classifier -> adapter -> Qwen
 
-This needs the approved data in `data/processed/` and the end-to-end dependencies:
+V3 is the default dataset. The tools never fall back to another dataset if V3 is missing, and a file is not accepted as V3
+because of its name. Rows, columns, class counts and evidence columns must match Kevin's notebooks.
 
-```bash
-python -m pip install -r requirements-qwen-e2e.txt
-```
-
-First create the data folder and put the two approved CSVs in `data/processed/`. Only `data/raw/` and `data/processed/`
-are gitignored, not the rest of `data/`, so keep other data files out of `data/`:
+Identify the two approved files. Replace the folder with your own:
 
 ```bash
-mkdir -p data/processed
+python -m src.nova_qwen check-dataset --train /path/to/cicids2017_V3_train_70.csv --validation /path/to/cicids2017_V3_validation_15.csv
 ```
 
-One step, if you have about 12 GB of free memory:
+Create exports from saved models or predictions, with the unmodified adapter and the complete validation file in order.
+Details and alternatives are in the testing guide.
 
 ```bash
-python scripts/qwen_e2e_from_notebook.py --limit 5
+python scripts/qwen_export_v3_alerts.py --validation /path/to/cicids2017_V3_validation_15.csv --dt-predictions dt_pred.npy --rf-predictions rf_pred.npy --dataset CICIDS2017-V3 --out-dir outputs
 ```
 
-Low-memory machines use two steps. Stop Ollama first, then run the notebook only:
+Check that each export's evidence equals the CSV at each `record_id`. An export from a filtered, sampled or reordered frame fails, unless the rows removed all come after the last alert. Rows without an alert cannot be compared, so a pass does not prove the export covered the complete frame. For V3, an alert-free tail too long to be chance for that number of alerts, or an export with no alerts at all, is also a failure, because V3's rows are shuffled, and the report shows `rows_after_last_alert`:
 
 ```bash
-python scripts/qwen_e2e_from_notebook.py --notebook-only
+python -m src.nova_qwen check-alignment outputs/decision_tree_alerts.json --validation /path/to/cicids2017_V3_validation_15.csv
 ```
 
-Then start Ollama again and run the Qwen part:
+Explain a small representative sample and write verified results, correlation, a worksheet and `summary.json`:
 
 ```bash
-python scripts/qwen_e2e_from_notebook.py --skip-notebook --limit 5
+python scripts/qwen_e2e_from_notebook.py --skip-notebook --data-dir /path/to/folder
 ```
 
-Outputs are in `outputs/qwen_e2e/`. The script regenerates its explanations, `correlation.json` and `summary.json` on
-every run, but never overwrites a worksheet: the first run writes `review_worksheet.csv`, a re-run writes
-`review_worksheet_<timestamp>.csv`. Score the sheet named in `summary.json` → `review_worksheet`. Notebook 03 also
-writes `decision_tree_confusion_matrix.png` in the repository root; it is not gitignored, so do not commit it.
+Main options of `qwen_e2e_from_notebook.py`:
+- `--limit N`: alerts per classifier, default 6. A negative, zero or non-numeric value is refused. More than 25 needs `--allow-large-run`.
+- `--select representative|first`: `representative` (default) covers DoS, DDoS, Bots, Web Attacks, a DT/RF class disagreement (both alerted, different classes) and the longest flow when they exist, then a negative duration, a row only one classifier flagged, and the other classes if there is room. Both classifiers explain the same row where possible. `summary.json` lists what was unavailable, or did not fit.
+- `--data-dir`, or `--train` and `--validation`: where the CSVs are. A file you name must exist. `--expected-train-sha256` and `--expected-validation-sha256` compare against published hashes; a mismatch stops the run.
+- `--exports-dir`, `--out-dir`: where the exports are, and where results go.
+- `--dataset-version NAME`: anything other than `V3` runs the general checks only, and is never reported as V3.
+- `--no-dataset-check`: explain exports without a dataset file. The run is reported as **NOT a verified V3 run**.
+- `--resume` with `--skip-notebook`: keep good results in `--out-dir` and redo only the rest (same exports, selection and settings).
+- `--notebook-only`, or no `--skip-notebook`: execute notebook 03 as committed (needs `requirements-qwen-e2e.txt`). The notebook's own path decides what it reads, so the script parses it, refuses if it cannot tell which files are read, and hashes those files. It also stops if the notebook did not write new exports. This is not the sampler in Jenn's report.
+
+`summary.json` records the dataset identity, the files, hashes and paths used, row alignment, the selection and why each
+alert was chosen, each classifier's counts, and the overall verdict. See the verdict table in the testing guide.
+`dataset.v3_profile_matched` is true if the validation file matches Kevin's notebooks and every alert in both exports
+matched its row. `dataset.real_v3_verified` also needs a matching published hash, because fabricated values or a different
+split with the same counts would match the profile. No hash has been published yet.
+
+A run refused before the notebook or inference changes nothing in `--out-dir`, including a `--resume` it cannot finish. A
+run that starts (in notebook mode, when the notebook starts) replaces `summary.json` at once, so an earlier verdict cannot
+survive it. In notebook mode, a refusal after the notebook has finished still leaves the new exports and the notebook's
+own files, because that run did happen. Files in `--out-dir` that this tool did not write are refused, not replaced; a
+worksheet or rubric file already there is kept, and the run writes a timestamped pair beside it.
 
 ## Known limitations
 
+- **Scope:** Qwen explains alerts the classifiers raised. It does not change predictions and never sees normal-classified rows, so it **cannot recover a false negative**. Good explanations are also not evidence of fewer false positives. See `docs/qwen_review_rubric.md`.
 - **CPU throughput:** about 20–30 s per alert. Full-export explanation needs a GPU or sampling.
 - **Semantic checks:** these are pattern-based heuristics. They were replayed over the 36 distinct real Qwen answers collected during testing (24 first attempts and 12 corrective re-asks): 30 pass the final validator. Of the 24 first attempts, 18 pass and 6 are rejected (an approximation "over 91,000", derived rates and an asserted protocol); all 12 re-ask answers pass. 5 of the 6 rejected answers were followed by an accepted re-ask; the "over 91,000" answer came from an early run whose re-ask did not fit the context, and that alert was explained in a later run. Unusual phrasings can still slip through or be rejected. Use the human-review worksheet.
 - **Known validator gaps:** a bare `m` for minutes ("lasted 101 m") is not checked as a time unit; a sub-second unit written before the number ("Flow Duration in microseconds was 101.041626", "Flow Duration (ms): 101.041626") is not checked either (hour, day, week and year words before the number are rejected); a value given for the wrong feature is missed unless the sentence names exactly one feature and gives one number, for example "The byte rate was 11 bytes per second" or a multi-feature sentence with swapped values (see Cross-feature values); negation is scoped to clauses by keyword rules, so unusual sentence structures can be excused or rejected wrongly.
@@ -350,10 +381,20 @@ writes `decision_tree_confusion_matrix.png` in the repository root; it is not gi
 | `MODEL_DIGEST_MISMATCH` | You have different weights under that tag. Re-pull, or deliberately set `NOVA_QWEN_EXPECTED_DIGEST` and report it. |
 | `OLLAMA_TIMEOUT` | The CPU is slow or the first model load is in progress. Raise `--timeout`; first loads can take a minute. |
 | `RUN_ABORTED`, or HTTP 500 "model runner has unexpectedly stopped" | Usually not enough memory. Give Docker or the VM at least 8 GB, then rerun with `--resume`. |
-| `RESUME_MISMATCH` | Different export, selection, model or settings than the file you are resuming. Run `--resume` without selection flags, or use a new `--out`. |
+| `RESUME_MISMATCH` | Different export, selection, model or settings than the file you are resuming. Run `--resume` without selection flags, or use a new `--out`. With the end-to-end script, rerun with the original selection, or move a file left over from an older run out of `--out-dir`. Without `--resume` the run starts over. |
 | `CONFIG_REMOTE_HOST` | Ollama is not on this machine. Only if that is intended: `--allow-remote-ollama`. |
 | `OUTPUT_EXISTS` / `OUTPUT_NOT_OURS` / `OUTPUT_IS_INPUT` | Use `--resume` or `--overwrite`, or choose another `--out`. The tool never overwrites inputs or files it did not write. |
 | `ALERT_FILE_UNREADABLE` … `Permission denied` | The adapter wrote the export 0600 as another user. Run as the same user, or `chmod 644` the export. |
+| `DATASET_MISSING` / `EXPORT_MISSING` | The named file is not there. No other dataset is substituted. See the testing guide, step 6. |
+| `DATASET_UNREADABLE` | The CSV is not readable as UTF-8 CSV. Download it again. |
+| `SAME_CLASSIFIER_SOURCE` / `MODEL_DETECTOR_MISMATCH` | The same file, or identical predictions on V3, was given for both classifiers, or the model files look swapped. |
+| `NOTEBOOK_TOOLS_MISSING` | Notebook mode needs nbconvert and ipykernel. `python -m pip install -r requirements-qwen-e2e.txt` |
+| `MODEL_NEEDS_JOBLIB` | A compressed model file was given without joblib installed. `python -m pip install -r requirements-qwen-e2e.txt` |
+| `EXPORT_MOVE_INCOMPLETE` | The final move of the export files failed partway, so `--out-dir` may hold a mixed set. Fix the cause and run the export again. |
+| `RESERVED_SPLIT_REFUSED` | The file name marks a test or reserved split. Use the validation file. If it is your own `--out` file, choose another name; a results file already written under such a name can be renamed and then resumed or read. |
+| `LARGE_RUN_NOT_AUTHORIZED` | Select fewer alerts, or pass `--allow-large-run` if the run really should take that long. |
+| `PREDICTIONS_NOT_COMPLETE` | Exports need one prediction per validation row, in file order. A sample or SMOKE subset cannot be exported. |
+| Dataset check failed on V3 | A row, column or class count differs from Kevin's notebooks, so this is not the V3 file as described. Check with Kevin before overriding with another `--dataset-version`. |
 | `UNSUPPORTED_SCHEMA_VERSION` | The export is not schema 1.1. Use exports from `feature/data-exploration` @ `5cbbabc9` or later. If the message says `schema_version None`, the file is not an alert export (for example a results file, `correlation.json` or `summary.json`); pass `outputs/<detector>_alerts.json`. |
 | `No module named 'src'` | Run the command from the repository root (the folder that contains `src/`). |
 | Many `rejected` answers | Look at `validation.errors` in the results file and report it; do not loosen the checks. |

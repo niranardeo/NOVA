@@ -26,6 +26,7 @@ Semantic quality beyond these checks still needs human review (python -m src.nov
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 
@@ -145,7 +146,8 @@ def parse_content(content):
         return None, "content is not a string"
     try:
         value = strict_json(content)
-    except ValueError as exc:
+        json.dumps(value, ensure_ascii=False).encode("utf-8")  # a lone surrogate cannot be stored as UTF-8
+    except ValueError as exc:  # UnicodeEncodeError is a ValueError
         return None, f"invalid JSON: {exc}"
     if not isinstance(value, dict):
         return None, f"expected a JSON object, got {type(value).__name__}"

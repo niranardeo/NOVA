@@ -493,7 +493,7 @@ def test_check_ollama_inference_failures_exit_3(fake_ollama, content, done):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="SIGINT delivery is POSIX-specific")
-def test_ctrl_c_exits_130_and_keeps_partial_results(fake_ollama, tmp_path):
+def test_ctrl_c_exits_130_and_keeps_partial_results(fake_ollama, tmp_path, sigint_deliverable):
     fake_ollama.default_chat = lambda b: ("sleep", 0.6, ("json", 200, chat_body(valid_answer(evidence_from_request(b)))))
     out = tmp_path / "r.json"
     env = {k: v for k, v in os.environ.items() if not k.startswith("NOVA_")}

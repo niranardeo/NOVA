@@ -1,7 +1,9 @@
 """Command-line interface.  Run from the repository root:  python -m src.nova_qwen <command> --help
 
-Exit codes: 0 success; 1 verification failed, an alert failed, or (with --strict) an answer was rejected;
-2 invalid input, arguments or resume request; 3 Ollama or model problem (incl. a run stopped because
+Exit codes: 0 finished (for explain this does not mean every answer was accepted: read the summary, or use --strict);
+1 verification or a dataset/alignment check failed, an alert failed, or (with --strict) an answer was rejected;
+2 invalid input, arguments or resume request, a missing dataset file, a refused test split, or a selection above the
+limit; 3 Ollama or model problem (incl. a run stopped because
 Ollama became unreachable); 4 output problem; 130 interrupted.
 """
 from __future__ import annotations
@@ -16,6 +18,7 @@ from .alerts import load_export
 from .config import QwenSettings
 from .errors import NovaQwenError, OllamaError, OutputError
 from .output import check_output_path, load_results, write_json_atomic, write_text_atomic
+from .reserved import refuse_reserved
 
 EXIT_OK, EXIT_FAILED, EXIT_INPUT, EXIT_OLLAMA, EXIT_OUTPUT, EXIT_INTERRUPTED = 0, 1, 2, 3, 4, 130
 DEFAULT_LIMIT = 10
@@ -74,13 +77,15 @@ def cmd_validate_export(args) -> int:
 
 
 def cmd_explain(args) -> int:
-    from .consumer import run
+    from .consumer import MAX_UNCONFIRMED_ALERTS, run
     settings = _settings(args)
     export = load_export(args.export, expected_detector=args.detector)
     out = check_output_path(args.out, [args.export], overwrite=args.overwrite, resume=args.resume)
     explicit = args.all or args.alert_id or args.limit is not None or args.offset
     from_previous = bool(args.resume and not explicit and out.exists())
     limit = None if args.all else (args.limit if args.limit is not None else DEFAULT_LIMIT)
+    max_alerts = None if args.allow_large_run else MAX_UNCONFIRMED_ALERTS
+    provenance = {"dataset_version": args.dataset_version, "verified": False} if args.dataset_version else None
 
     def progress(i, n, r):
         if not args.quiet:
@@ -88,7 +93,8 @@ def cmd_explain(args) -> int:
                   + (f" {r['error']['code']}" if r.get("error") else ""), file=sys.stderr)
 
     doc = run(export, settings, out, limit=limit, offset=args.offset, alert_ids=args.alert_id,
-              resume=args.resume, selection_from_previous=from_previous, progress=progress)
+              resume=args.resume, selection_from_previous=from_previous, progress=progress, max_alerts=max_alerts,
+              provenance=provenance)
     _print({"output": str(out), "run_status": doc["run_status"], "summary": doc["summary"],
             "selection": doc["selection"], "resumed_from": doc.get("resumed_from"),
             "model": {k: doc["model"].get(k) for k in ("name", "digest", "digest_verified", "contacted")}})
@@ -96,6 +102,36 @@ def cmd_explain(args) -> int:
     if s["failed"] or (args.strict and s["rejected"]):
         return EXIT_FAILED
     return EXIT_OK
+
+
+def _write_report(out, report: dict, marker: str) -> None:
+    if out:
+        out = Path(out)
+        _guard_report_path(out, [], lambda head: f'"report": "{marker}"' in head, overwrite=True)
+        write_json_atomic(out, report)
+
+
+def cmd_check_dataset(args) -> int:
+    from .datasets import check_dataset, require_version_spelling
+    report = check_dataset(train=args.train, validation=args.validation,
+                           version=require_version_spelling(args.dataset_version),
+                           expected_train_sha256=args.expected_train_sha256,
+                           expected_validation_sha256=args.expected_validation_sha256)
+    _print(report)  # before writing, so a problem with --out cannot lose the result of a long scan
+    _write_report(args.out, report, "nova-qwen-dataset-check")
+    return EXIT_OK if report["passed"] else EXIT_FAILED
+
+
+def cmd_check_alignment(args) -> int:
+    from .datasets import V3, V3_VALIDATION_ROWS, check_alignment, require_version_spelling
+    version = require_version_spelling(args.dataset_version)
+    export = load_export(args.export, expected_detector=args.detector)
+    report = {**check_alignment(export, args.validation, expected_rows=V3_VALIDATION_ROWS if version == V3 else None,
+                                require_alerts=version == V3),
+              "dataset_version": version}
+    _print(report)
+    _write_report(args.out, report, "nova-qwen-alignment-check")
+    return EXIT_OK if report["passed"] else EXIT_FAILED
 
 
 def cmd_verify(args) -> int:
@@ -108,13 +144,19 @@ def cmd_verify(args) -> int:
 
 def _guard_report_path(out: Path, inputs: list, marker_ok, overwrite: bool) -> None:
     """Refuse to overwrite inputs, unrelated files, or (without --overwrite) an earlier report."""
+    try:
+        out.exists()
+    except OSError as exc:
+        raise OutputError(f"cannot reach {out}: {exc}", code="OUTPUT_WRITE_FAILED") from exc
     if any(Path(p).resolve() == out.resolve() for p in inputs):
         raise OutputError(f"{out} is one of the inputs", code="OUTPUT_IS_INPUT")
+    refuse_reserved(out)  # also for a new file: no tool here could read or replace it afterwards
     if out.exists():
         if out.is_dir():
             raise OutputError(f"{out} is a directory", code="OUTPUT_IS_DIRECTORY")
         try:
-            head = out.read_text(encoding="utf-8")[:4096]
+            with out.open(encoding="utf-8") as fh:
+                head = fh.read(4096)
         except (OSError, UnicodeDecodeError):
             head = ""
         if not marker_ok(head):
@@ -141,10 +183,10 @@ def cmd_correlate(args) -> int:
 
 
 def cmd_worksheet(args) -> int:
-    from .worksheet import RUBRIC, WORKSHEET_MARKER, rows_from_results, to_csv
+    from .worksheet import RUBRIC, is_worksheet_header, rows_from_results, to_csv
     out = Path(args.out)
     rubric = out.with_name(out.stem + ".rubric.txt")
-    _guard_report_path(out, args.results, lambda head: WORKSHEET_MARKER in head.splitlines()[0] if head else False,
+    _guard_report_path(out, args.results, is_worksheet_header,
                        overwrite=args.overwrite)
     _guard_report_path(rubric, args.results, lambda head: head.startswith("Scoring guide"), overwrite=True)
     rows = rows_from_results([load_results(p) for p in args.results])
@@ -176,13 +218,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--detector", choices=["decision_tree", "random_forest"], help="require this detector")
     group = p.add_mutually_exclusive_group()
     group.add_argument("--limit", type=int, help=f"maximum alerts to explain (default {DEFAULT_LIMIT} for a new run)")
-    group.add_argument("--all", action="store_true", help="explain every alert (about 25 s per alert on CPU)")
+    group.add_argument("--all", action="store_true",
+                       help="explain every alert (about 25 s per alert on CPU; more than 25 needs --allow-large-run)")
     group.add_argument("--alert-id", action="append", help="explain this alert id (repeatable)")
     p.add_argument("--offset", type=int, default=0, help="skip this many alerts before --limit (not with --alert-id)")
     p.add_argument("--resume", action="store_true",
                    help="continue an existing results file for the same export, selection and settings "
                         "(without selection flags, the previous selection is used)")
     p.add_argument("--overwrite", action="store_true", help="replace an existing results file")
+    p.add_argument("--allow-large-run", action="store_true",
+                   help="permit more than 25 alerts in this run (a full export would take weeks on CPU)")
+    p.add_argument("--dataset-version", help="record this dataset version in the results file as declared, unverified "
+                                             "(use check-dataset to verify files)")
     p.add_argument("--strict", action="store_true", help="exit 1 if any answer was rejected")
     p.add_argument("--num-ctx", type=int)
     p.add_argument("--num-predict", type=int)
@@ -207,6 +254,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out")
     p.set_defaults(func=cmd_correlate)
 
+    p = sub.add_parser("check-dataset", help="identify the training/validation CSVs (never reads a test split)")
+    p.add_argument("--validation", required=True)
+    p.add_argument("--train", help="optional: the Qwen stage itself reads only the validation file")
+    p.add_argument("--dataset-version", default="V3",
+                   help="V3 (default) compares rows, columns and class counts with Kevin's notebooks; any other "
+                        "value runs the general checks only and is never reported as V3")
+    p.add_argument("--expected-train-sha256")
+    p.add_argument("--expected-validation-sha256")
+    p.add_argument("--out", help="also write the report to this file")
+    p.set_defaults(func=cmd_check_dataset)
+
+    p = sub.add_parser("check-alignment",
+                       help="check that an export's record_ids and evidence match the validation CSV rows")
+    p.add_argument("export")
+    p.add_argument("--validation", required=True)
+    p.add_argument("--detector", choices=["decision_tree", "random_forest"])
+    p.add_argument("--dataset-version", default="V3", help="V3 (default) also requires V3's validation row count")
+    p.add_argument("--out", help="also write the report to this file")
+    p.set_defaults(func=cmd_check_alignment)
+
     p = sub.add_parser("worksheet", help="build a human-review CSV from results files")
     p.add_argument("results", nargs="+")
     p.add_argument("--out", required=True)
@@ -230,4 +297,7 @@ def main(argv=None) -> int:
         return EXIT_OUTPUT
     except NovaQwenError as exc:  # input, contract, config, results-file and resume problems
         print(json.dumps({"error": exc.to_dict()}, indent=2), file=sys.stderr)
+        return EXIT_INPUT
+    except OSError as exc:  # an input path that cannot be reached: Path.exists and is_file raise on EACCES, ENAMETOOLONG
+        print(json.dumps({"error": {"code": "FILE_ERROR", "message": str(exc)}}, indent=2), file=sys.stderr)
         return EXIT_INPUT

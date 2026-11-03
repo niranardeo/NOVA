@@ -1,5 +1,6 @@
-# Full classifier -> alert adapter -> Qwen run (scripts/qwen_e2e_from_notebook.py), which executes
-# notebooks/03_baseline_model_development_Oct_06_2026_Jennifer.ipynb headlessly.
+# Executing notebooks/03_baseline_model_development_Oct_06_2026_Jennifer.ipynb headlessly
+# (scripts/qwen_e2e_from_notebook.py without --skip-notebook), and loading saved models in
+# scripts/qwen_export_v3_alerts.py. Consuming existing exports needs none of this.
 #   python -m pip install -r requirements-qwen-e2e.txt
 -r requirements-qwen-dev.txt
 scikit-learn==1.9.0

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .errors import OutputError, ResultsFileError
+from .reserved import refuse_reserved
 
 OUTPUT_SCHEMA = "nova-qwen-explanations"
 # 0.x = provisional: the response fields and statuses still need team approval (docs/qwen_integration.md).
@@ -29,9 +30,13 @@ RESULT_KEYS = ("alert_id", "record_id", "record_position", "detector", "run_id",
                "status", "response", "validation", "attempts", "error")
 
 
+def _validation_ok(v) -> bool:
+    return v is None or (isinstance(v, dict) and all(isinstance(v.get(k) or [], list) for k in ("errors", "warnings")))
+
+
 def load_results(path) -> dict:
     """Read a results file given as input. Problems are input errors (exit 2), never tracebacks."""
-    path = Path(path)
+    path = refuse_reserved(path)
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -44,11 +49,22 @@ def load_results(path) -> dict:
     for key, typ in (("source", dict), ("selection", dict), ("model", dict), ("results", list)):
         if not isinstance(doc.get(key), typ):
             problems.append(f"{key} must be a {typ.__name__}")
+    settings = doc["model"].get("settings") if isinstance(doc.get("model"), dict) else None
+    provenance = doc.get("provenance")
+    earlier = provenance.get("previous_provenance") if isinstance(provenance, dict) else None
+    for key, value in (("provenance", provenance), ("provenance.previous_provenance", earlier),
+                       ("generator", doc.get("generator")), ("model.settings", settings)):
+        if value is not None and not isinstance(value, dict):  # optional, but read as objects on resume
+            problems.append(f"{key} must be a dict")
     for i, r in enumerate(doc.get("results") if isinstance(doc.get("results"), list) else []):
         if not isinstance(r, dict) or any(k not in r for k in RESULT_KEYS):
             problems.append(f"results[{i}] is missing required keys")
         elif not isinstance(r["evidence"], dict) or not isinstance(r["evidence_normalized"], list):
             problems.append(f"results[{i}] has malformed evidence")
+        elif not _validation_ok(r["validation"]):
+            problems.append(f"results[{i}] has malformed validation")
+        elif any(isinstance(r[k], (dict, list)) for k in ("detector", "run_id", "dataset", "record_id")):
+            problems.append(f"results[{i}] has a non-scalar identity field")
     if problems:
         raise ResultsFileError(f"{path} is a malformed results file: {problems[:5]}", code="RESULTS_MALFORMED")
     return doc
@@ -57,10 +73,15 @@ def load_results(path) -> dict:
 def check_output_path(output_path, input_paths, *, overwrite: bool, resume: bool) -> Path:
     """Refuse to clobber inputs or unrelated files."""
     out = Path(output_path)
+    try:
+        out.exists()
+    except OSError as exc:
+        raise OutputError(f"cannot reach {out}: {exc}", code="OUTPUT_WRITE_FAILED") from exc
     resolved = out.resolve()
     for p in input_paths:
         if Path(p).resolve() == resolved:
             raise OutputError("the output path is the same as an input alert export", code="OUTPUT_IS_INPUT")
+    refuse_reserved(out)  # also for a new file: no tool here could read, resume or replace it afterwards
     if out.exists():
         if out.is_dir():
             raise OutputError(f"output path is a directory: {out}", code="OUTPUT_IS_DIRECTORY")
@@ -95,7 +116,7 @@ def write_text_atomic(path, text: str) -> None:
     path = Path(path)
     try:
         _write(path, text)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise OutputError(f"cannot write {path}: {exc}", code="OUTPUT_WRITE_FAILED") from exc
 
 

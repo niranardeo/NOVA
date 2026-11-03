@@ -343,3 +343,8 @@ def test_negated_lists_are_not_invented_details(sentence):
 def test_negation_does_not_cross_a_real_clause_boundary(sentence):
     # explanation/observations are strict fields
     assert "INVENTED_NETWORK_DETAIL" in codes(edit(explanation=VALID["explanation"] + " " + sentence))[0]
+
+
+def test_a_lone_surrogate_is_refused_because_it_cannot_be_stored():
+    obj, err = parse_content('{"explanation": "cut off \\ud83d"}')
+    assert obj is None and "invalid JSON" in err

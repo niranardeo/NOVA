@@ -6,7 +6,16 @@ venv
 .pytest_cache
 data
 outputs
-*.csv
+**/*.csv
+# saved models, prediction files and notebook plots, at any depth
+**/*.joblib
+**/*.pkl
+**/*.pickle
+**/*.npy
+**/*.npz
+**/*.png
+**/.venv
+**/venv
 *.ipynb_checkpoints
 # secrets (same as .gitignore), at any depth
 **/.env

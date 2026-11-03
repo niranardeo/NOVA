@@ -4,6 +4,7 @@ import copy
 import http.client
 import json
 import os
+import socket
 import time
 
 import pytest
@@ -14,7 +15,7 @@ from src.nova_qwen.alerts import load_export
 from src.nova_qwen.config import QwenSettings
 from src.nova_qwen.consumer import FINGERPRINT_SETTINGS, RunAborted, run
 from src.nova_qwen.correlate import correlate
-from src.nova_qwen.errors import ConfigError, ModelNotAvailable, OllamaProtocolError, ResumeMismatch
+from src.nova_qwen.errors import ConfigError, ModelNotAvailable, OllamaProtocolError, OllamaTimeout, ResumeMismatch
 from src.nova_qwen.features import data_quality_notes, normalize_evidence, normalize_value
 from src.nova_qwen.ollama import OllamaClient
 from src.nova_qwen.prompt import response_schema
@@ -347,7 +348,7 @@ def test_worksheet_marker_must_be_in_the_header_line(fake_ollama, settings, tmp_
     res = tmp_path / "r.json"
     run(load_export(DT_FIXTURE), settings, res, limit=1)
     fake = tmp_path / "notes.csv"
-    fake.write_text("my,own,header\nH1_faithful_to_evidence_0_2 appears only in a data row\n")
+    fake.write_text("my,own,header\nexplanation_accuracy_0_2 and H1_faithful_to_evidence_0_2 appear only in a data row\n")
     r = cli("worksheet", res, "--out", fake, "--overwrite")
     assert r.returncode == 4 and json.loads(r.stderr)["error"]["code"] == "OUTPUT_NOT_OURS"
 
@@ -433,10 +434,16 @@ def test_body_is_read_in_bounded_chunks(fake_ollama, monkeypatch):
     assert sizes and all(a is not None and a <= 65536 for a in sizes) and sum(a for a in sizes) <= 1001
 
 
-def test_connect_timeout_is_the_short_one(tmp_path):
+def test_connect_timeout_is_the_short_one(monkeypatch):
+    seen = []
+
+    def no_network(address, timeout=None, *args, **kwargs):
+        seen.append((address, timeout))
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr(socket, "create_connection", no_network)
     s = QwenSettings(url="http://10.255.255.1:11434", allow_remote=True, connect_timeout_seconds=0.5,
                      timeout_seconds=60, transport_retries=0).validate()
-    start = time.monotonic()
-    with pytest.raises(Exception) as e:
-        OllamaClient(s).version()
-    assert time.monotonic() - start < 5 and type(e.value).__name__ in ("OllamaTimeout", "OllamaUnavailable")
+    with pytest.raises(OllamaTimeout):
+        OllamaClient(s).list_models()  # /api/tags has a 30 s deadline, so only the connect timeout can give 0.5
+    assert seen == [(("10.255.255.1", 11434), 0.5)]

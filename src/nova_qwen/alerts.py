@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .errors import (AlertContractError, AlertFileInvalidJSON, AlertFileMissing, AlertFileUnreadable,
                      UnsupportedSchemaVersion)
+from .reserved import refuse_reserved
 
 SUPPORTED_SCHEMA_VERSION = "1.1"
 DETECTOR_PREFIX = {"decision_tree": "dt", "random_forest": "rf"}
@@ -78,6 +79,7 @@ def _no_duplicate_keys(pairs):
 
 def load_export(path, expected_detector: str | None = None) -> AlertExport:
     """Read and fully validate one schema 1.1 alert export."""
+    refuse_reserved(path)
     path = Path(path)
     if not path.exists():
         raise AlertFileMissing(f"alert export not found: {path}")

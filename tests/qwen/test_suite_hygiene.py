@@ -4,6 +4,7 @@ A conftest hook that skips the opt-in live tests once skipped EVERY test in the 
 passes all collected items to pytest_collection_modifyitems). This check makes sure the team's tests
 and the offline Qwen tests still run when the live directory is collected too."""
 import os
+import re
 import subprocess
 import sys
 
@@ -25,11 +26,12 @@ def test_live_opt_in_does_not_skip_other_tests():
                                cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
     expected = int(collected.stdout.strip().splitlines()[-1].split()[0])  # "N tests collected"
     assert expected >= 12 + 20
-    assert passed == expected and skipped == 10, last
+    assert passed == expected and skipped == 11, last
 
 
 def test_team_tests_still_discoverable_by_unittest():
     """The team runs `python -m unittest discover -s tests`; the Qwen tests must not break that."""
     r = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"], cwd=ROOT,
                        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, capture_output=True, text=True, timeout=300)
-    assert r.returncode == 0 and "Ran 12 tests" in r.stderr and "OK" in r.stderr, r.stderr[-1500:]
+    ran = re.search(r"^Ran (\d+) tests? in ", r.stderr, re.M)
+    assert r.returncode == 0 and ran and int(ran.group(1)) >= 12 and "OK" in r.stderr, r.stderr[-1500:]

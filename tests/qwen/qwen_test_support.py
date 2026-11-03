@@ -66,6 +66,70 @@ def chat_body(content, *, done_reason="stop", prompt_eval_count=300, eval_count=
             "load_duration": 10_000_000}
 
 
+class PickledModel:
+    """A stand-in for a saved classifier, importable when a test loads it back from a file."""
+
+    feature_names_in_ = None
+
+    def __init__(self, label="DoS", every=2, params=None):
+        self.label, self.every, self.params = label, every, params or {}
+
+    def predict(self, features):
+        import numpy as np
+        return np.array([self.label if i % self.every == 0 else "Normal Traffic" for i in range(len(features))])
+
+    def get_params(self):
+        return self.params
+
+
+class RandomForestStandIn(PickledModel):
+    """Named like a Random Forest, to test that swapped model files are noticed."""
+
+
+class PipelineStandIn(PickledModel):
+    """Shaped like a scikit-learn Pipeline: the real classifier is the last step."""
+
+    def __init__(self, final):
+        super().__init__()
+        self.steps = [("scale", None), ("classifier", final)]
+
+    def get_params(self):
+        return {"classifier__max_depth": 7}
+
+
+class SearchStandIn(PickledModel):
+    """Shaped like a fitted GridSearchCV: its own settings are not the model's."""
+
+    def __init__(self, best):
+        super().__init__()
+        self.best_estimator_ = best
+
+    def get_params(self):
+        return {"n_jobs": 99}
+
+
+class DecisionTreeStandIn(PickledModel):
+    """Named like a Decision Tree, with settings to record."""
+
+    def get_params(self):
+        return {"max_depth": 7, "random_state": 42}
+
+
+class RaisingModel(PickledModel):
+    def predict(self, features):
+        raise ValueError("this model cannot predict")
+
+
+class RunsOnLoad:
+    """Unpickling this creates the marker file, so a test can see whether a model file was ever loaded."""
+
+    def __init__(self, marker):
+        self.marker = str(marker)
+
+    def __reduce__(self):
+        return (open, (self.marker, "w"))
+
+
 class FakeOllama:
     """Scriptable Ollama stand-in. ``chat_actions`` is consumed in order; when empty, ``default_chat``."""
 

@@ -1,7 +1,7 @@
 # Optional, reproducible Linux environment for the NOVA Qwen consumer and its tests.
 # The consumer itself needs only Python; Docker is not required (see docs/qwen_integration.md).
 # Build from the repository root:
-#   docker build -f docker/qwen/Dockerfile -t nova-qwen:0.1 .
+#   docker build -f docker/qwen/Dockerfile -t nova-qwen:0.2 .
 FROM python:3.12-slim@sha256:5b8b1421ccb6a525860a77863c049eab5847076cda34e030c75a80c58faf3f3c
 
 ENV PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1

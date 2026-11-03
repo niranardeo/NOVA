@@ -173,3 +173,65 @@ def test_detectors_must_be_one_of_each():
     with pytest.raises(IncompatibleExports) as e:
         check_compatible(load_export(DT_FIXTURE), load_export(DT_FIXTURE))
     assert "expected a decision_tree and a random_forest export" in str(e.value)
+
+
+def _results_doc(*records):
+    return {"results": [{"record_id": rec, "detector": det, "predicted_class": cls, "status": "explained",
+                         "evidence": {}, "evidence_normalized": []} for rec, det, cls in records]}
+
+
+def test_worksheet_uses_the_team_criteria_with_prioritization_not_applicable():
+    from src.nova_qwen.worksheet import HUMAN_COLUMNS, NO_PRIORITY_POLICY, PRIORITIZATION_COLUMN, rows_from_results
+    assert HUMAN_COLUMNS[:5] == ["explanation_accuracy_0_2", "evidence_grounding_0_2", "uncertainty_handling_0_2",
+                                 "consistency_0_2", PRIORITIZATION_COLUMN]
+    row = rows_from_results([_results_doc(("val-000002", "decision_tree", "DoS"))])[0]
+    assert row[PRIORITIZATION_COLUMN] == NO_PRIORITY_POLICY
+    assert row["explanation_accuracy_0_2"] == "" and row["reviewer"] == ""
+
+
+def test_worksheet_groups_the_same_row_across_classifiers_for_consistency_review():
+    from src.nova_qwen.worksheet import rows_from_results
+    rows = rows_from_results([_results_doc(("val-000002", "decision_tree", "DoS"), ("val-000003", "decision_tree", "DoS")),
+                              _results_doc(("val-000002", "random_forest", "DDoS"))])
+    groups = {(r["record_id"], r["detector"]): r["consistency_group"] for r in rows}
+    assert groups[("val-000002", "decision_tree")] == groups[("val-000002", "random_forest")] == "val-000002"
+    assert groups[("val-000003", "decision_tree")] == ""
+
+
+def test_worksheet_flags_rare_classes_and_states_the_false_negative_limit():
+    from src.nova_qwen.worksheet import RUBRIC, rows_from_results
+    rows = rows_from_results([_results_doc(("val-1", "decision_tree", "Bots"), ("val-2", "decision_tree", "Web Attacks"),
+                                           ("val-3", "decision_tree", "DoS"))])
+    assert "never what the classifier missed" in rows[0]["class_review_note"] and rows[1]["class_review_note"]
+    assert rows[2]["class_review_note"] == ""
+    assert "No priority policy is approved" in RUBRIC and "Report totals out of 8" in RUBRIC
+
+
+def test_worksheet_header_marker_accepts_current_and_earlier_sheets_only():
+    from src.nova_qwen.worksheet import is_worksheet_header
+    assert is_worksheet_header("alert_id,explanation_accuracy_0_2,reviewer\nrow")
+    assert is_worksheet_header("alert_id,H1_faithful_to_evidence_0_2,reviewer\nrow")
+    assert not is_worksheet_header("mine\nexplanation_accuracy_0_2 in a data row")
+    assert not is_worksheet_header("")
+
+
+def test_consistency_group_needs_the_same_run_dataset_and_evidence():
+    from src.nova_qwen.worksheet import rows_from_results
+
+    def doc(det, run_id, duration):
+        return {"results": [{"record_id": "val-000002", "detector": det, "predicted_class": "DoS", "status": "explained",
+                             "run_id": run_id, "dataset": "d", "evidence": {"Flow Duration": duration},
+                             "evidence_normalized": []}]}
+
+    assert all(r["consistency_group"] == "" for r in rows_from_results([doc("decision_tree", "a", 1), doc("random_forest", "b", 2)]))
+    assert all(r["consistency_group"] == "" for r in rows_from_results([doc("decision_tree", "a", 1), doc("random_forest", "a", 2)]))
+    same = rows_from_results([doc("decision_tree", "a", 1), doc("random_forest", "a", 1)])
+    assert [r["consistency_group"] for r in same] == ["val-000002", "val-000002"]
+
+
+def test_text_that_cannot_be_encoded_is_a_write_failure_and_leaves_no_file(tmp_path):
+    from src.nova_qwen.errors import OutputError
+    from src.nova_qwen.output import write_text_atomic
+    with pytest.raises(OutputError) as info:
+        write_text_atomic(tmp_path / "r.json", "cut off \ud83d")
+    assert info.value.code == "OUTPUT_WRITE_FAILED" and list(tmp_path.iterdir()) == []

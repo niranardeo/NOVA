@@ -1,11 +1,21 @@
 """pytest fixtures for the offline Qwen tests. Helpers live in qwen_test_support.py (a unique module
 name, so imports cannot collide with tests/qwen_live/conftest.py)."""
 import shutil
+import signal
 import socket
 
 import pytest
 
 from qwen_test_support import FIXTURES, FakeOllama, make_settings
+
+
+@pytest.fixture
+def sigint_deliverable():
+    """A background job of a non-interactive shell starts with SIGINT ignored and its children inherit that, so a signal
+    a test sends would do nothing. A handler, unlike SIG_IGN, is reset to the default on exec."""
+    previous = signal.signal(signal.SIGINT, signal.default_int_handler)
+    yield
+    signal.signal(signal.SIGINT, previous)
 
 
 @pytest.fixture

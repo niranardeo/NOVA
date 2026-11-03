@@ -2,4 +2,4 @@
 
 Run from the repository root:  python -m src.nova_qwen --help
 """
-__version__ = "0.1.0"
+__version__ = "0.2.0"

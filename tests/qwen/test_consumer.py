@@ -263,3 +263,33 @@ def test_conflicting_classifier_results_stay_separate(fake_ollama, settings, tmp
     assert (d["detector"], d["predicted_class"]) == ("decision_tree", "DDoS")
     assert (r["detector"], r["predicted_class"]) == ("random_forest", "DoS")
     assert d["evidence"] == r["evidence"]
+
+
+def test_a_model_answer_that_cannot_be_stored_is_rejected_not_a_crash(fake_ollama, settings, tmp_path):
+    """A lone surrogate escape is valid JSON, but UTF-8 cannot hold it, so writing it would fail on every resume too."""
+    export = load_export(DT_FIXTURE)
+    fake_ollama.default_chat = lambda body: ("json", 200, chat_body('{"explanation": "cut off \\ud83d"}'))
+    doc = run(export, settings, tmp_path / "r.json", limit=1)
+    assert doc["results"][0]["status"] == "rejected"
+    assert load_json(tmp_path / "r.json")["results"][0]["status"] == "rejected"
+
+
+def test_check_only_refuses_or_returns_without_writing_or_sending(fake_ollama, settings, tmp_path):
+    export = load_export(DT_FIXTURE)
+    out = tmp_path / "r.json"
+    run(export, settings, out, check_only=True, resume=True, limit=1)  # no earlier file: nothing to refuse
+    assert not out.exists() and fake_ollama.chat_requests() == []
+    run(export, settings, out, limit=1)
+    before = out.read_bytes()
+    fake_ollama.requests.clear()
+    run(export, settings, out, check_only=True, resume=True, limit=1)
+    assert out.read_bytes() == before and fake_ollama.chat_requests() == []
+    with pytest.raises(ResumeMismatch):
+        run(export, settings, out, check_only=True, resume=True, limit=2)
+    assert out.read_bytes() == before and fake_ollama.chat_requests() == []
+
+
+def test_check_only_on_an_empty_export_writes_nothing(fake_ollama, settings, tmp_path):
+    out = tmp_path / "r.json"
+    run(load_export(DT_EMPTY), settings, out, check_only=True, resume=True)
+    assert not out.exists() and fake_ollama.requests == []
