@@ -165,7 +165,7 @@ python scripts/qwen_smoke.py
 - Good explanations are not evidence that false positives or false negatives went down.
 - `priority` is always `null`: no policy is approved.
 - The checks are rule-based. Human review decides quality, and it has not been done yet.
-- About 25 s per alert on CPU, so only small samples go to Qwen.
-- A bounded run on Jenn's real V3 exports passed (20 alerts), but row alignment against the V3 CSV and the human review are still open. See `docs/qwen_v3_integration_results.md`.
+- About 16–19 s per request on CPU, so only small samples go to Qwen.
+- A bounded run on Jenn's real V3 exports passed with the V3 profile matched; file hashes not pinned (20 alerts processed: 8 explained, 12 abstained, 0 rejected, 0 failed; every alert matched its validation row). The human review is still open. See `docs/qwen_v3_integration_results.md`.
 
-**Next:** Kevin provides V3 hashes and confirms units; the alignment check runs against the V3 validation CSV; the team does the human review; nobody touches the reserved test split until the configuration is frozen.
+**Next:** the team does the human review; nobody touches the test split until the configuration is frozen.

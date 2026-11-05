@@ -1,8 +1,10 @@
 # NOVA Qwen Integration (`src/nova_qwen`)
 
 Owner: Paul (Qwen developer). Status: **ready for independent team testing on the V3 workflow. A bounded run on Jenn's
-real V3 validation exports passed** (20 alerts; see `docs/qwen_v3_integration_results.md`). Row alignment against the V3
-CSV and the human review of explanation quality are still open. The response format is
+real V3 validation exports passed with the V3 profile matched; file hashes not pinned** (20 alerts processed: 8 explained,
+12 abstained, 0 rejected, 0 failed; every alert in both exports matched its validation row; see
+`docs/qwen_v3_integration_results.md`). The human review of explanation quality is still
+open. The response format is
 **provisional** until the team approves it (see "What is provisional").
 
 Team documents: testing guide `docs/qwen_testing_guide.md`, review rubric `docs/qwen_review_rubric.md`, walkthrough
@@ -31,7 +33,7 @@ CICIDS2017 V3 validation CSV (complete, in file order)
 | Model | `qwen3.5:4b-q4_K_M`, digest `d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04` (about 3.3 GB on disk; the pull's main layer is 2.6 GB). |
 | Memory | At least 8 GB free for the model with an 8K context (about 5 GB was observed in use). Notebook 03 as committed needs about 6 GB; together with the model, about 12 GB. If that is too much, stop Ollama, run `--notebook-only`, start Ollama, then run `--skip-notebook`. In Docker, set the memory limit accordingly. |
 | Speed | CPU-only: about 20–30 s per alert in a 14-vCPU Linux VM. One classifier's ~63k alerts would take **weeks** on CPU, so more than 25 alerts in a run needs `--allow-large-run`. |
-| Data | Only for the end-to-end run: the approved `cicids2017_V3_train_70.csv` and `cicids2017_V3_validation_15.csv`, in a folder holding only those files. **Never put `cicids2017_V3_test_RESERVED_15.csv` there**; the tools refuse test and reserved file names. |
+| Data | Only for the end-to-end run: the approved `cicids2017_V3_train_70.csv` and `cicids2017_V3_validation_15.csv`, in a folder holding only those files. **Never put the test split there** (`cicids2017_V3_initial_test_15.csv` in `V3_Stratified_Split`, `cicids2017_V3_test_RESERVED_15.csv` in Kevin's notebook 04); the tools refuse test and reserved file names. |
 
 ## Setup (macOS / Ubuntu)
 

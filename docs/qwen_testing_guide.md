@@ -12,7 +12,7 @@ identifier, predicted class and raw evidence value exactly as exported.
 - It does not decide priorities (`priority` is always `null`, because none is approved).
 - It does not change predictions or recover missed attacks. See `docs/qwen_review_rubric.md`.
 
-**Never copy, open, or point any tool at `cicids2017_V3_test_RESERVED_15.csv`.** The tools refuse test or reserved file
+**Never copy, open, or point any tool at the test split** (`cicids2017_V3_initial_test_15.csv` in `V3_Stratified_Split`, called `cicids2017_V3_test_RESERVED_15.csv` in Kevin's notebook 04). The tools refuse test or reserved file
 names, but a renamed copy can only be caught after it has been opened, so please keep it out of your working folders.
 
 ## Requirements
@@ -145,8 +145,17 @@ From `Nova_IT691_Dataset_Version_2_and_3/V3_Stratified_Split` (OneDrive link in 
 - `cicids2017_V3_train_70.csv`
 - `cicids2017_V3_validation_15.csv`
 
-Do not use "Download all": the reserved test file is in that folder. Keep them in a folder holding only these two files,
-outside the repository or in `data/processed/` (gitignored). Set a shell variable to that folder (this is your own path):
+Do not use "Download all": the test file is in that folder (`cicids2017_V3_initial_test_15.csv`, the held-out split; the tools refuse it by name). If you were given `V3_Stratified_Split.zip`, extract the two files by name only, and never the test file:
+
+```bash
+V3_DIR=/path/to/folder/with/the/two/files
+```
+
+```bash
+mkdir -p "$V3_DIR" && unzip -j V3_Stratified_Split.zip 'V3_Stratified_Split/cicids2017_V3_validation_15.csv' 'V3_Stratified_Split/cicids2017_V3_train_70.csv' -d "$V3_DIR"
+```
+
+Keep them in a folder holding only these two files, outside the repository or in `data/processed/` (gitignored). Set a shell variable to that folder (this is your own path):
 
 ```bash
 V3_DIR=/path/to/folder/with/the/two/files
@@ -247,13 +256,13 @@ HANDOFF="$(cd /path/to/extracted/handoff && pwd)"
 mkdir -p outputs/v3_handoff && ln -sf "$HANDOFF/decision_tree_v3_validation_alerts.json" outputs/v3_handoff/decision_tree_alerts.json && ln -sf "$HANDOFF/random_forest_v3_validation_alerts.json" outputs/v3_handoff/random_forest_alerts.json
 ```
 
-This is the exact bounded run in `docs/qwen_v3_integration_results.md`: the representative sample of 8 per classifier, plus two more class disagreements, 20 alerts in all, about 7–8 minutes on CPU. Without the V3 CSV it ends `E2E PASS (NOT a verified V3 run)`, because no row could be compared:
+This is the exact profile-matched run in `docs/qwen_v3_integration_results.md`: the representative sample of 8 per classifier, plus two more class disagreements, 20 alerts in all, about 7–8 minutes on CPU. With the two V3 files from step 6a it checks the dataset and every alert's row first, and ends `E2E PASS (V3 profile matched; file hash not pinned)`:
 
 ```bash
-python scripts/qwen_e2e_from_notebook.py --skip-notebook --no-dataset-check --exports-dir outputs/v3_handoff --out-dir outputs/qwen_e2e_v3 --limit 8 --alert-id dt-023930 --alert-id rf-023930 --alert-id dt-036230 --alert-id rf-036230
+python scripts/qwen_e2e_from_notebook.py --skip-notebook --data-dir "$V3_DIR" --exports-dir outputs/v3_handoff --out-dir outputs/qwen_e2e_v3 --limit 8 --alert-id dt-023930 --alert-id rf-023930 --alert-id dt-036230 --alert-id rf-036230
 ```
 
-With the V3 validation CSV, replace `--no-dataset-check` with `--data-dir "$V3_DIR"` so the alignment check runs as well.
+Without the V3 files, replace `--data-dir "$V3_DIR"` with `--no-dataset-check`; the run still works but ends `E2E PASS (NOT a verified V3 run)`, because no row could be compared.
 
 ### 6d. Human review
 
