@@ -70,7 +70,8 @@ DEFAULT_EXPORTS = ROOT / "outputs"
 DEFAULT_OUT = ROOT / "outputs" / "qwen_e2e"
 DETECTORS = ("decision_tree", "random_forest")
 PREFIX = {"decision_tree": "dt-", "random_forest": "rf-"}
-RECOMMENDED_DATASET_FIELD = "CICIDS2017-V3"
+RECOMMENDED_DATASET_FIELD = "CICIDS2017-V3-validation"  # the value in Jenn's V3 validation exports
+NAMES_V3_RE = re.compile(r"(?i)(?<![a-z])v3(?![a-z0-9])")  # "CICIDS2017V3" names V3 too
 # Why the two can differ is documented in docs/qwen_v3_integration_results.md.
 NOTEBOOK_CAVEAT = ("Notebook executed as committed (train_test_split, n_jobs=2). Jenn's report describes "
                    "class-stratified reservoir sampling and n_jobs=1, so this is not her reported experiment.")
@@ -284,17 +285,19 @@ def previous_notebook_run(out_dir: Path, exports: dict) -> tuple:
 
 def dataset_field_note(version: str, fields: dict, files_checked: bool) -> str:
     values = sorted(set(fields.values()))
-    if version == V3 and values != [RECOMMENDED_DATASET_FIELD]:
-        source = ("V3 identity is recorded here instead, from the files." if files_checked else
-                  "No dataset file was read, so V3 is only declared for this run, not established.")
-        return f"The exports say dataset {values}. {source} {RECOMMENDED_DATASET_FIELD!r} is the recommended value, " \
-               f"pending team approval."
-    return f"The exports say dataset {values}."
+    if version != V3:
+        return f"The exports say dataset {values}."
+    source = ("V3 identity is recorded here, from the files, not from the label." if files_checked else
+              "No dataset file was read, so V3 is only declared for this run, not established.")
+    if all(NAMES_V3_RE.search(v) for v in values):
+        return f"The exports say dataset {values}. {source}"
+    return f"The exports say dataset {values}, which does not name V3. {source} Jenn's V3 exports use " \
+           f"{RECOMMENDED_DATASET_FIELD!r}."
 
 
 def refuse_contradicting_labels(version: str, fields: dict) -> None:
     for field in fields.values():
-        named = re.search(r"(?i)(?<![a-z0-9])v(\d+)(?![a-z0-9])", field)
+        named = re.search(r"(?i)(?<![a-z])v(\d+)(?![a-z0-9])", field)
         if version != V3 and "v3" in field.lower():
             raise DatasetError(f"--dataset-version {version} but the exports say {fields}. Refusing to mix them.")
         if version == V3 and named and named.group(1) != "3":

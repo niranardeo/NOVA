@@ -116,7 +116,7 @@ def test_clean_run_is_pass_and_records_everything(fake_ollama, tmp_path, exports
     assert s["dataset"]["declared_version"] == "V3" and s["dataset"]["real_v3_verified"] is False
     assert s["dataset"]["v3_profile_matched"] is False
     assert s["dataset"]["alignment"] == "NOT CHECKED" and s["dataset"]["export_dataset_field"]["decision_tree"] == "CICIDS2017"
-    assert "CICIDS2017-V3" in s["dataset"]["field_note"] and "pending team approval" in s["dataset"]["field_note"]
+    assert "does not name V3" in s["dataset"]["field_note"] and "'CICIDS2017-V3-validation'" in s["dataset"]["field_note"]
     assert "No dataset file was read" in s["dataset"]["field_note"] and "from the files" not in s["dataset"]["field_note"]
     assert s["paths"]["exports_dir"] == str(exports) and s["paths"]["validation"] is None and s["paths"]["cwd"]
     assert "microseconds" in s["unit_assumption"] and "false negative" in s["scope_note"]
@@ -657,10 +657,11 @@ def test_exports_that_say_v3_cannot_be_declared_something_else(fake_ollama, tmp_
     assert r.returncode == 2 and "Refusing to mix" in json.loads(r.stderr)["error"]["message"]
 
 
-def test_exports_naming_another_version_cannot_be_declared_v3(fake_ollama, tmp_path, exports):
+@pytest.mark.parametrize("label", ["CICIDS2017-V2", "CICIDS2017V2"])
+def test_exports_naming_another_version_cannot_be_declared_v3(fake_ollama, tmp_path, exports, label):
     for name in ("decision_tree_alerts.json", "random_forest_alerts.json"):
         doc = load_json(exports / name)
-        doc["dataset"] = "CICIDS2017-V2"
+        doc["dataset"] = label
         (exports / name).write_text(json.dumps(doc))
     r = script(*run_args(tmp_path, exports, "--limit", "1"), fake=fake_ollama)
     assert r.returncode == 2 and "Refusing to mix" in json.loads(r.stderr)["error"]["message"]
@@ -991,6 +992,21 @@ def test_notebook_run_records_what_it_read_and_wrote(tmp_path, monkeypatch):
     assert info["exports_sha256"]["decision_tree"] == e2e.sha256(exports / "decision_tree_alerts.json")
     assert info["note"] == "Notebook executed as given."  # the caveat describes Jenn's notebook only
     assert load_json(tmp_path / "o" / "notebook_run.json")["notebook"]["sha256"] == e2e.sha256(nb)
+
+
+@pytest.mark.parametrize("label", ["CICIDS2017-V3-validation", "CICIDS2017-V3", "CICIDS2017V3"])
+def test_an_export_label_that_names_v3_is_kept_without_recommending_another(fake_ollama, tmp_path, exports, label):
+    for det in ("decision_tree", "random_forest"):
+        doc = load_json(exports / f"{det}_alerts.json")
+        doc["dataset"] = label
+        (exports / f"{det}_alerts.json").write_text(json.dumps(doc))
+    assert script(*run_args(tmp_path, exports, "--limit", "1"), fake=fake_ollama).returncode == 0
+    s = summary(tmp_path)
+    note = s["dataset"]["field_note"]
+    assert s["dataset"]["export_dataset_field"]["decision_tree"] == label and label in note
+    assert "does not name V3" not in note and "Jenn's V3 exports use" not in note and "recommended" not in note
+    assert "only declared" in note
+    assert load_json(tmp_path / "out" / "decision_tree_explanations.json")["source"]["dataset"] == label
 
 
 def test_a_missing_notebook_record_does_not_claim_where_the_exports_came_from(fake_ollama, tmp_path, exports):

@@ -166,6 +166,6 @@ python scripts/qwen_smoke.py
 - `priority` is always `null`: no policy is approved.
 - The checks are rule-based. Human review decides quality, and it has not been done yet.
 - About 25 s per alert on CPU, so only small samples go to Qwen.
-- Real V3 end-to-end verification is waiting on real V3 exports. See `docs/qwen_v3_integration_results.md`.
+- A bounded run on Jenn's real V3 exports passed (20 alerts), but row alignment against the V3 CSV and the human review are still open. See `docs/qwen_v3_integration_results.md`.
 
-**Next:** Jenn provides V3 exports; Kevin provides V3 hashes and confirms units; I run the bounded real V3 test; the team does the human review; nobody touches the reserved test split until the configuration is frozen.
+**Next:** Kevin provides V3 hashes and confirms units; the alignment check runs against the V3 validation CSV; the team does the human review; nobody touches the reserved test split until the configuration is frozen.

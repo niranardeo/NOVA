@@ -42,7 +42,7 @@ Fill in `reviewer` and `review_notes` too. Leave a row blank if you did not revi
 | `status` | What it means | How to score |
 |---|---|---|
 | `explained` | A validated answer | Score normally |
-| `abstained` | A validated answer that declines to interpret the evidence | Score normally. Do not mark it down just for abstaining |
+| `abstained` | A validated answer where the model set `abstain: true`. In the real V3 run, every abstained answer still interpreted the evidence, and the same flow and class could abstain for one classifier and not the other | Score normally. Do not mark it down just for abstaining, and do not treat abstaining as a judgement of the evidence |
 | `rejected` | The model answered, and the answer failed the automated checks | Leave scores blank and note why in `review_notes` if useful |
 | `failed` | No answer, because of a technical error | Leave blank |
 

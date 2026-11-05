@@ -80,6 +80,111 @@ def test_invented_number_is_rejected():
         == ["NUMBER_NOT_IN_EVIDENCE"]
 
 
+# From the real V3 run: rf-000011 (15 microseconds, 1 packet, 400000 bytes per second) was accepted with "approx. 400KB",
+# because a number glued to a unit was never read as a number. The true amount is about 6 bytes.
+V3_SHORT = normalize_evidence({"Flow Duration": 15, "Total Fwd Packets": 1, "Flow Bytes/s": 400000.0})
+
+
+@pytest.mark.parametrize("sentence", [
+    "However, a single packet moving at 400000 bytes per second implies a massive payload size (approx. 400KB).",
+    "That is about 400kB of data.", "The rate is roughly 3.2Mbps.", "It sent 6B of payload.",
+    "This is roughly 0.47pps.", "The burst moved 400K bytes.",
+])
+def test_a_number_glued_to_a_unit_is_still_checked(sentence):
+    answer = edit(observations=["Flow Duration is 0.000015 seconds.", "Total Fwd Packets is 1 packet.",
+                                "Flow Bytes/s is 400000 bytes per second."],
+                  explanation="A single short packet could fit the prediction but cannot establish an attack. " + sentence)
+    assert codes(answer, norm=V3_SHORT, notes=[])[0] == ["NUMBER_NOT_IN_EVIDENCE"]
+
+
+@pytest.mark.parametrize("sentence", [
+    "Flow Bytes/s is 400000B/s.", "The 1st observation is the short duration.", "It lasted 15us.", "It lasted 15μsecs.",
+    "It lasted 0.000015s.", "The rate of 400000 bytes/s is high for 1 packet.",
+])
+def test_glued_values_that_equal_the_evidence_and_ordinals_pass(sentence):
+    answer = edit(observations=["Flow Duration is 0.000015 seconds.", "Total Fwd Packets is 1 packet.",
+                                "Flow Bytes/s is 400000 bytes per second."],
+                  explanation="A single short packet could fit the prediction but cannot establish an attack. " + sentence)
+    assert codes(answer, norm=V3_SHORT, notes=[])[0] == []
+
+
+def test_the_real_v3_answer_with_an_invented_payload_size_is_rejected():
+    real = {"observations": ["Flow Duration is 0.000015 seconds.", "Total Fwd Packets is 1 packet.",
+                             "Flow Bytes/s is 400000 bytes per second."],
+            "explanation": "The classifier predicted 'Port Scanning' based on extremely short flow duration and very low "
+                           "packet count. However, a single packet moving at 400000 bytes per second implies a massive "
+                           "payload size (approx. 400KB), which is inconsistent with typical port scan behavior that "
+                           "usually involves small packets or no payload. The model may have learned an unusual pattern "
+                           "in this specific dataset where high byte rates correlate with scanning, but the evidence "
+                           "alone cannot confirm malicious intent. These observations are internally contradictory to "
+                           "standard port scan definitions and do not establish a confirmed attack.",
+            "limitations": ["Only three flow features were provided.", "No packet contents or payload data is available.",
+                            "No surrounding traffic context is visible.", "No ground truth labels exist to verify the prediction."],
+            "evidence_used": ["Flow Duration", "Total Fwd Packets", "Flow Bytes/s"], "priority": None, "abstain": True}
+    assert codes(real, norm=V3_SHORT, notes=[], cls="Port Scanning")[0] == ["NUMBER_NOT_IN_EVIDENCE"]
+
+
+@pytest.mark.parametrize("sentence", [
+    # From the real V3 run (rf-000330, first attempt): a hedge, wrongly rejected as a confirmation claim.
+    "While the model associates this combination with the prediction, the evidence suggests a potential false positive "
+    "or an anomaly rather than confirmed malicious activity.",
+    "This looks like routine traffic rather than a confirmed attack.",
+])
+def test_rather_than_confirmed_is_a_hedge(sentence):
+    assert codes(edit(explanation=VALID["explanation"] + " " + sentence))[0] == []
+
+
+@pytest.mark.parametrize("sentence", [
+    "Rather than a scan, this confirms a DoS attack.",
+    "Rather than speculating, the evidence confirms the attack.",
+    "This is a DoS attack rather than a scan.",
+])
+def test_rather_than_does_not_excuse_a_claim_after_it(sentence):
+    found = codes(edit(explanation=VALID["explanation"] + " " + sentence))[0]
+    assert found and set(found) <= {"CONFIRMATION_CLAIM", "ASSERTIVE_CLASSIFICATION"}
+
+
+@pytest.mark.parametrize("sentence,notes", [
+    ("The short duration and few packets indicate a DoS attack rather than benign traffic, confirming the prediction.", NOTES),
+    ("Rather than hedging, we are confident this is a DoS attack.", NOTES),
+    ("Rather than guessing, I confirm this is a DoS attack.", NOTES),
+    ("Rather than benign activity, the pattern confirms a DoS attack.", NOTES),
+    ("These flows, rather than being benign, confirm a DoS attack.", NOTES),
+    ("Rather than UDP, TCP was used.", NOTES),
+    ("Rather than genuine traffic, we are seeing corrupted data.", []),
+    ("Rather than a brief exchange, traffic continued for hours.", NOTES),
+])
+def test_rather_than_excuses_only_the_confirmation_word_right_after_it(sentence, notes):
+    assert codes(edit(explanation=VALID["explanation"] + " " + sentence), notes=notes)[0]
+
+
+V3_SHORT_OBSERVATIONS = ["Flow Duration is 0.000015 seconds.", "Total Fwd Packets is 1 packet.",
+                         "Flow Bytes/s is 400000 bytes per second."]
+
+
+@pytest.mark.parametrize("sentence", ["Flow Bytes/s is 1B/s.", "Total Fwd Packets is 400000pkts.",
+                                      "Total Fwd Packets is 2017pkts.", "Flow Bytes/s is 3B/s."])
+def test_a_glued_number_after_a_feature_name_must_be_that_features_value(sentence):
+    answer = edit(observations=V3_SHORT_OBSERVATIONS,
+                  explanation="A single short packet could fit the prediction but cannot establish an attack. " + sentence)
+    assert codes(answer, norm=V3_SHORT, notes=[])[0] == ["NUMBER_NOT_IN_EVIDENCE"]
+
+
+@pytest.mark.parametrize("sentence", ["It sits in the 99th percentile for byte rate.", "It is in the top 1st percentile.",
+                                      "It lies in the 2nd quartile of flows."])
+def test_ordinal_rank_statistics_are_rejected(sentence):
+    answer = edit(observations=V3_SHORT_OBSERVATIONS,
+                  explanation="A single short packet could fit the prediction but cannot establish an attack. " + sentence)
+    assert codes(answer, norm=V3_SHORT, notes=[])[0] == ["CONFIDENCE_CLAIM"]
+
+
+def test_a_missing_percentile_may_be_named_in_limitations():
+    answer = edit(observations=V3_SHORT_OBSERVATIONS,
+                  explanation="A single short packet could fit the prediction but cannot establish an attack.",
+                  limitations=["No percentile or baseline for these values is available."])
+    assert codes(answer, norm=V3_SHORT, notes=[])[0] == []
+
+
 def test_feature_count_may_be_mentioned():
     assert codes(edit(limitations=["Only 3 features were provided."]))[0] == []
 

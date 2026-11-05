@@ -11,13 +11,13 @@ array: predict() returns an object array, so save it with np.save("dt_pred.npy",
 
     python scripts/qwen_export_v3_alerts.py --validation /media/sf_NOVA_Data/cicids2017_V3_validation_15.csv \\
         --dt-predictions data/processed/dt_pred.npy --rf-predictions data/processed/rf_pred.npy \\
-        --dataset CICIDS2017-V3 --out-dir outputs
+        --dataset CICIDS2017-V3-validation --out-dir outputs
 
 From saved models (predicts in chunks; needs requirements-qwen-e2e.txt). Loading a model file runs code from it, so
 only use models you made yourself; --trust-model-files records that decision:
 
     python scripts/qwen_export_v3_alerts.py --validation ... --dt-model dt.joblib --rf-model rf.joblib \\
-        --trust-model-files --dataset CICIDS2017-V3 --out-dir outputs
+        --trust-model-files --dataset CICIDS2017-V3-validation --out-dir outputs
 
 Do not pass a sample or SMOKE subset: this refuses anything but one prediction per validation row. Labels are read
 only for the manifest's metrics and are never written to an export. The reserved test split is refused by name.
@@ -166,8 +166,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dt-model", type=Path)
     p.add_argument("--rf-model", type=Path)
     p.add_argument("--trust-model-files", action="store_true", help="required with --dt-model/--rf-model")
-    p.add_argument("--dataset", required=True, help="value for the export's dataset field. CICIDS2017-V3 is "
-                                                    "recommended, pending team approval")
+    p.add_argument("--dataset", required=True, help="value for the export's dataset field. Jenn's V3 exports use "
+                                                    "CICIDS2017-V3-validation")
     p.add_argument("--dataset-version", default=V3, help="V3 (default) must match Kevin's notebooks; anything else is "
                                                          "never reported as V3")
     p.add_argument("--expected-validation-sha256", help="published hash of the validation file; a mismatch stops the "

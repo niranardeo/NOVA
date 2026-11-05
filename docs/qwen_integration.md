@@ -1,7 +1,8 @@
 # NOVA Qwen Integration (`src/nova_qwen`)
 
-Owner: Paul (Qwen developer). Status: **ready for independent team testing on the V3 workflow; real V3 end-to-end
-verification is waiting on real V3 exports** (see `docs/qwen_v3_integration_results.md`). The response format is
+Owner: Paul (Qwen developer). Status: **ready for independent team testing on the V3 workflow. A bounded run on Jenn's
+real V3 validation exports passed** (20 alerts; see `docs/qwen_v3_integration_results.md`). Row alignment against the V3
+CSV and the human review of explanation quality are still open. The response format is
 **provisional** until the team approves it (see "What is provisional").
 
 Team documents: testing guide `docs/qwen_testing_guide.md`, review rubric `docs/qwen_review_rubric.md`, walkthrough
@@ -213,7 +214,7 @@ Report each column separately rather than one average.
 
 ## Results file (`nova-qwen-explanations`, version `0.1.0-provisional`)
 
-Abbreviated, illustrative example of the file's shape, not a V3 result: no real V3 run exists yet, and the sample values come from an older pre-V3 export. A real file also contains `model.capabilities/expected_digest/family/parameter_size/size_bytes`,
+Abbreviated, illustrative example of the file's shape. The sample values come from an older pre-V3 export; the real V3 results are summarised in `docs/qwen_v3_integration_results.md`. A real file also contains `model.capabilities/expected_digest/family/parameter_size/size_bytes`,
 all `model.settings`, and per attempt `model`, `done`, `wall_seconds`, `total_duration_seconds`,
 `load_duration_seconds`, `thinking_chars` and `raw_truncated`. Rejected results add `rejected_response`, and
 resumed runs add a top-level `resumed_from`. `provenance` records the dataset identity this run's caller established (null if
@@ -255,7 +256,7 @@ none was given or stored). A resume that establishes less keeps the earlier, str
 
 `status` values:
 - **explained:** a validated answer.
-- **abstained:** a validated answer that declines to interpret the evidence.
+- **abstained:** a validated answer where the model set `abstain: true`. It does not mean the answer declined to interpret the evidence: in the real V3 run every abstained answer still did (see `docs/qwen_review_rubric.md`).
 - **rejected:** the model answered but failed the checks; `response` is null, and `rejected_response` and `attempts[].raw_response` are kept for audit.
 - **failed:** no answer, because of a transport or model error or a budget refusal; see `error`.
 
@@ -266,7 +267,7 @@ Results are written atomically after **every** alert, with normal file permissio
 - **Response fields:** `observations`, `explanation`, `limitations`, `evidence_used`, `priority`, `abstain`, adapted from the "Suggested response fields" in `docs/alert_schema.md`. `alert_id` and the other identifiers are attached in code.
 - **Priority:** `priority` is always `null`, because **no priority policy has been approved**. None is invented.
 - **Evidence allowlist and units:** the 3-feature allowlist is the adapter's provisional allowlist. Units follow CICFlowMeter conventions and `docs/alert_schema.md` (Flow Duration in microseconds, Total Fwd Packets as a count, Flow Bytes/s in bytes per second). `check-dataset` tests whether a file is consistent with them, but that is plausibility, not proof: **the V3 unit assumption still needs the team's confirmation.**
-- **Dataset field value:** `CICIDS2017-V3` is recommended, pending team approval. The consumer accepts any clean non-empty value and does not rewrite it.
+- **Dataset field value:** Jenn's V3 validation exports use `CICIDS2017-V3-validation`. The consumer accepts any clean non-empty value and does not rewrite it; a V3 run whose exports do not name V3 says so in `summary.json`.
 - **Rules and prompt:** the deterministic rejection rules and the prompt (`nova-qwen-prompt-1.0`).
 - **Consumer-side tightening:** the reader is stricter than the adapter. It rejects `run_id`/`dataset` with surrounding whitespace or control characters, non-canonical IDs, unknown classes and values above 1e15.
 
@@ -322,7 +323,7 @@ Create exports from saved models or predictions, with the unmodified adapter and
 Details and alternatives are in the testing guide.
 
 ```bash
-python scripts/qwen_export_v3_alerts.py --validation /path/to/cicids2017_V3_validation_15.csv --dt-predictions dt_pred.npy --rf-predictions rf_pred.npy --dataset CICIDS2017-V3 --out-dir outputs
+python scripts/qwen_export_v3_alerts.py --validation /path/to/cicids2017_V3_validation_15.csv --dt-predictions dt_pred.npy --rf-predictions rf_pred.npy --dataset CICIDS2017-V3-validation --out-dir outputs
 ```
 
 Check that each export's evidence equals the CSV at each `record_id`. An export from a filtered, sampled or reordered frame fails, unless the rows removed all come after the last alert. Rows without an alert cannot be compared, so a pass does not prove the export covered the complete frame. For V3, an alert-free tail too long to be chance for that number of alerts, or an export with no alerts at all, is also a failure, because V3's rows are shuffled, and the report shows `rows_after_last_alert`:
@@ -362,9 +363,10 @@ worksheet or rubric file already there is kept, and the run writes a timestamped
 ## Known limitations
 
 - **Scope:** Qwen explains alerts the classifiers raised. It does not change predictions and never sees normal-classified rows, so it **cannot recover a false negative**. Good explanations are also not evidence of fewer false positives. See `docs/qwen_review_rubric.md`.
-- **CPU throughput:** about 20–30 s per alert. Full-export explanation needs a GPU or sampling.
-- **Semantic checks:** these are pattern-based heuristics. They were replayed over the 36 distinct real Qwen answers collected during testing (24 first attempts and 12 corrective re-asks): 30 pass the final validator. Of the 24 first attempts, 18 pass and 6 are rejected (an approximation "over 91,000", derived rates and an asserted protocol); all 12 re-ask answers pass. 5 of the 6 rejected answers were followed by an accepted re-ask; the "over 91,000" answer came from an early run whose re-ask did not fit the context, and that alert was explained in a later run. Unusual phrasings can still slip through or be rejected. Use the human-review worksheet.
+- **CPU throughput:** 13–24 s per model request on CPU in the real V3 runs (median 16–19 s), and up to 40 s for an alert that needed a corrective re-ask. Full-export explanation needs a GPU or sampling.
+- **Semantic checks:** these are pattern-based heuristics. Replayed over the 68 distinct real Qwen answers saved during testing (43 from older and synthetic runs, 25 from the two real V3 runs), the current validator accepts 58 and rejects 10. The rejections are derived or approximate numbers ("over 91,000", "approximately 80 kilobytes per second", "0.47 packets per second", "approx. 400KB") and one asserted protocol. Every rejected answer in the real V3 run was followed by an accepted re-ask. Unusual phrasings can still slip through or be rejected. Use the human-review worksheet.
 - **Known validator gaps:** a bare `m` for minutes ("lasted 101 m") is not checked as a time unit; a sub-second unit written before the number ("Flow Duration in microseconds was 101.041626", "Flow Duration (ms): 101.041626") is not checked either (hour, day, week and year words before the number are rejected); a value given for the wrong feature is missed unless the sentence names exactly one feature and gives one number, for example "The byte rate was 11 bytes per second" or a multi-feature sentence with swapped values (see Cross-feature values); negation is scoped to clauses by keyword rules, so unusual sentence structures can be excused or rejected wrongly.
+- **Not caught by any rule (from the real V3 run):** a rate described as an amount in words ("significant volume transferred in that instant" for 52,434 bytes per second over 0.000267 s, about 14 bytes); general-knowledge statements about what attacks "typically" do; and named techniques that are not in the evidence (for example "slowloris" or "beaconing"). These need the human review.
 - **No derived numbers:** derived numbers are rejected even when correct, for example "9 packets over 98.68 s ≈ 0.091 packets per second". This is deliberate: earlier tests showed the model's arithmetic is unreliable, so the prompt forbids new numbers and the validator enforces it.
 - **Cross-feature values:** a value that belongs to another feature is caught only when a sentence names one feature and gives one number.
 - **Interpretations:** with only 3 features, interpretations are necessarily shallow (audit finding NOVA-25).

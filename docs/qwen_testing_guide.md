@@ -98,7 +98,7 @@ Jenn's own tests. Expect `Ran 12 tests` and `OK`:
 python -m unittest discover -s tests
 ```
 
-Everything. Expect **`939 passed, 11 skipped, 12 subtests passed`**; the 11 skips are the opt-in live tests. If you run as root (some containers), 11 file-permission tests also skip: `928 passed, 22 skipped`.
+Everything. Expect **`977 passed, 11 skipped, 12 subtests passed`**; the 11 skips are the opt-in live tests. If you run as root (some containers), 11 file-permission tests also skip, so 22 are skipped in all.
 
 ```bash
 python -m pytest -p no:cacheprovider -q tests
@@ -128,7 +128,7 @@ Smoke test, 2 alerts per classifier, about 2–4 minutes. It should end with `AL
 python scripts/qwen_smoke.py --live-only
 ```
 
-Full live suite, about 10–15 minutes on CPU. Expect **11 passed**:
+Full live suite, about 5–15 minutes on CPU. Expect **11 passed**:
 
 ```bash
 NOVA_QWEN_LIVE=1 python -m pytest -p no:cacheprovider -v tests/qwen_live
@@ -169,7 +169,7 @@ python -m pip install -r requirements-qwen-e2e.txt
 ```
 
 ```bash
-python scripts/qwen_export_v3_alerts.py --validation "$V3_DIR/cicids2017_V3_validation_15.csv" --dt-model DT_MODEL_FILE --rf-model RF_MODEL_FILE --trust-model-files --dataset CICIDS2017-V3 --out-dir outputs
+python scripts/qwen_export_v3_alerts.py --validation "$V3_DIR/cicids2017_V3_validation_15.csv" --dt-model DT_MODEL_FILE --rf-model RF_MODEL_FILE --trust-model-files --dataset CICIDS2017-V3-validation --out-dir outputs
 ```
 
 Replace `DT_MODEL_FILE` and `RF_MODEL_FILE` with your saved models. Loading a model file runs code from it, so use only models you made yourself. With saved predictions instead, use `--dt-predictions FILE --rf-predictions FILE`: text with one class name per line, or a `.npy` string array, one per validation row, in file order. `predict()` returns an object array, which is refused because loading it would need pickle, so save it with `np.save("dt_pred.npy", y_pred_dt.astype(str))`.
@@ -235,6 +235,26 @@ Results are in `outputs/qwen_e2e/`: `*_explanations.json`, `correlation.json`, `
 - **Re-runs.** A run refused or blocked before the notebook or inference changes nothing, so the earlier files still belong together; check `generated_utc` in `summary.json`. A run that starts (in notebook mode, when the notebook starts) replaces `summary.json` at once, so an earlier verdict cannot survive it. In notebook mode, a refusal after the notebook has finished still leaves the new exports and the notebook's own files, because that run did happen. If a run stops early, `summary.json` says INCOMPLETE or FAILED and `classifiers.<name>.results_file` names only the results from this run.
 - **Worksheets are never overwritten.** If a worksheet or rubric file is already there, a re-run writes `review_worksheet_<timestamp>.csv` beside it, and `summary.json` → `review_worksheet` names the current one.
 
+### 6c (handoff). Run on Jenn's V3 handoff exports
+
+Jenn's handoff ZIP holds `decision_tree_v3_validation_alerts.json` and `random_forest_v3_validation_alerts.json`. The script reads `decision_tree_alerts.json` and `random_forest_alerts.json` from `--exports-dir`, so link the files under those names in an empty folder. Nothing is copied or changed, and the results record each file's SHA-256 (the recorded `file_name` is the link name). Set `HANDOFF` to the folder where you extracted the ZIP. The links need an absolute path; a relative one makes them dangle, and the run then stops with `alert export not found`. This form always gives an absolute path:
+
+```bash
+HANDOFF="$(cd /path/to/extracted/handoff && pwd)"
+```
+
+```bash
+mkdir -p outputs/v3_handoff && ln -sf "$HANDOFF/decision_tree_v3_validation_alerts.json" outputs/v3_handoff/decision_tree_alerts.json && ln -sf "$HANDOFF/random_forest_v3_validation_alerts.json" outputs/v3_handoff/random_forest_alerts.json
+```
+
+This is the exact bounded run in `docs/qwen_v3_integration_results.md`: the representative sample of 8 per classifier, plus two more class disagreements, 20 alerts in all, about 7–8 minutes on CPU. Without the V3 CSV it ends `E2E PASS (NOT a verified V3 run)`, because no row could be compared:
+
+```bash
+python scripts/qwen_e2e_from_notebook.py --skip-notebook --no-dataset-check --exports-dir outputs/v3_handoff --out-dir outputs/qwen_e2e_v3 --limit 8 --alert-id dt-023930 --alert-id rf-023930 --alert-id dt-036230 --alert-id rf-036230
+```
+
+With the V3 validation CSV, replace `--no-dataset-check` with `--data-dir "$V3_DIR"` so the alignment check runs as well.
+
 ### 6d. Human review
 
 Open the worksheet and score the rows using `docs/qwen_review_rubric.md`. The automated checks do not judge whether an explanation is sensible; your scores do.
@@ -260,6 +280,6 @@ Human review:              rows scored per classifier; average of EACH column; w
 Problems:                  exact command, full error output (the JSON error has a code)
 ```
 
-Attach `outputs/qwen_e2e/summary.json` (it includes your local file paths), `outputs/export_manifest.json` if you made one, and your scored worksheet. **Do not attach** datasets, the test split, the `*_alerts.json` exports, `correlation.json` or model files.
+Attach `summary.json` from the `--out-dir` you used (`outputs/qwen_e2e/` by default, `outputs/qwen_e2e_v3/` for the handoff run; it includes your local file paths), `outputs/export_manifest.json` if you made one, and your scored worksheet. **Do not attach** datasets, the test split, the `*_alerts.json` exports, `correlation.json` or model files.
 
 Full reference: `docs/qwen_integration.md`.

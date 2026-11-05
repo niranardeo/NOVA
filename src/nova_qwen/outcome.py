@@ -6,7 +6,7 @@ does not count as a pass.
 
 Alert-level meanings:
   explained   validated answer
-  abstained   validated answer declining to interpret the evidence
+  abstained   validated answer with abstain: true (the model's own flag, not a judgement of the evidence)
   rejected    the model answered, and the answer failed the checks (after the corrective re-ask)
   failed      no answer: transport, model or budget error
   incomplete  selected, but not processed (interrupted run)

@@ -38,11 +38,14 @@ MAX_ITEMS, MAX_ITEM_CHARS, MAX_EXPLANATION_CHARS, MIN_EXPLANATION_WORDS = 6, 400
 ALLOWED_CONSTANTS = (2017.0,)  # the dataset name "CICIDS2017" / "CICIDS 2017" appears in the system prompt
 
 NUM = r"[-+]?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?"
-NUMBER_RE = re.compile(rf"(?<![\w.]){NUM}(?![\w])")
+# A number glued to a unit ("400KB", "0.47pps") is still a number to check; an ordinal ("1st") is not a quantity, and
+# rank statistics ("99th percentile") are caught by CONFIDENCE_RE.
+NUM_END = r"(?!\d)(?!(?:st|nd|rd|th)\b)"
+NUMBER_RE = re.compile(rf"(?<![\w.]){NUM}{NUM_END}")
 TIME_UNITS = {
     "nanosecond": 1e-9, "nanoseconds": 1e-9, "ns": 1e-9, "nsec": 1e-9, "nsecs": 1e-9,
     "microsecond": 1e-6, "microseconds": 1e-6, "µs": 1e-6, "μs": 1e-6, "us": 1e-6, "usec": 1e-6, "usecs": 1e-6,
-    "µsec": 1e-6, "μsec": 1e-6, "microsec": 1e-6, "microsecs": 1e-6,
+    "µsec": 1e-6, "μsec": 1e-6, "µsecs": 1e-6, "μsecs": 1e-6, "microsec": 1e-6, "microsecs": 1e-6,
     "millisecond": 1e-3, "milliseconds": 1e-3, "ms": 1e-3, "msec": 1e-3, "msecs": 1e-3, "millisec": 1e-3,
     "millisecs": 1e-3,
     "second": 1.0, "seconds": 1.0, "sec": 1.0, "secs": 1.0, "s": 1.0,
@@ -97,6 +100,9 @@ CONFIRM_RE = re.compile(r"\b(?:confirm|confirms|confirmed|confirming|definitely|
                         r"undoubtedly|unquestionably|prove|proves|proved|proven|proving|demonstrates?|demonstrated|"
                         r"establish(?:es|ed)?|clearly (?:is|was|an?|indicates?|shows?|demonstrates?)|is certain)\b",
                         re.I)
+# "an anomaly rather than confirmed malicious activity": only the confirmation word right after "rather than" is denied;
+# "rather than" excuses nothing else in the clause.
+RATHER_THAN_BEFORE_RE = re.compile(r"\brather\s+than\s+(?:an?\s+)?$", re.I)
 HEDGE_RE = re.compile(r"\b(?:to|needs?|needed|would|could|might|may|must|should|until|unless|if|whether|"
                       r"cannot be|before)\b", re.I)
 SUFFICIENCY_RE = re.compile(r"\b(?:enough|sufficient|sufficiently|suffices?)\b", re.I)
@@ -110,8 +116,10 @@ PREDICTION_CONTEXT_RE = re.compile(r"\b(?:possible|possibly|potential|potentiall
                                    r"predicts?|alleged|apparent|likely|probable|presumed|classified|classifier|"
                                    r"classification|labell?ed|flagged|identified|categori[sz]ed|detected|marked|"
                                    r"assigned|considered|model|consistent with)\b", re.I)
+# No distribution is supplied, so any rank statistic ("99th percentile") is invented as well.
 CONFIDENCE_RE = re.compile(r"[0-9]\s*%|\bper ?cent\b|\bconfiden(?:ce|t)\b|\bprobabilit(?:y|ies)\b|\bprobable\b|"
-                           r"\blikelihood\b|\bodds\b|\bscore of\b", re.I)
+                           r"\blikelihood\b|\bodds\b|\bscore of\b|\b(?:percentile|centile|quantile|quartile|quintile|decile)s?\b",
+                           re.I)
 DATA_QUALITY_RE = re.compile(r"\b(?:corrupt\w*|impossible|invalid (?:data|value|record)|erroneous|data error|"
                              r"unrealistic|implausible|glitch\w*|faulty|nonsensical)\b", re.I)   # claims
 DATA_QUALITY_MENTION_RE = re.compile(DATA_QUALITY_RE.pattern + r"|\bdata[- ]quality\b|\bartef?act\b|\bartifact\b|"
@@ -308,6 +316,8 @@ def _check_claims(v: Validation, text: str, notes: list, strict: bool, reported:
         if INTENSIFIER_RE.search(sentence):
             _once(v, reported, "CONFIRMATION_CLAIM", f"states the prediction as certain: {short!r}", short)
         for m in CONFIRM_RE.finditer(sentence):
+            if RATHER_THAN_BEFORE_RE.search(sentence[:m.start()]):
+                continue
             window = _window_before(sentence, m.start(), strict)
             negated = bool(NEGATION_RE.search(window))
             sufficiency = bool(SUFFICIENCY_RE.search(window))
@@ -418,7 +428,7 @@ def _check_numbers_and_units(v: Validation, text: str, normalized: list, strict:
         attached = {}
         for f in normalized:
             pattern = (rf"{re.escape(f.feature)}\s*(?:\([^)]*\)\s*)?(?:is|was|of|=|:|at|equals|reached|measured)?\s*"
-                       rf"(?:about|approximately|roughly|around|exactly|only|just)?\s*({NUM})(?![\w])")
+                       rf"(?:about|approximately|roughly|around|exactly|only|just)?\s*({NUM}){NUM_END}")
             for am in re.finditer(pattern, original, re.I):
                 attached[am.start(1)] = f
         for m in NUMBER_RE.finditer(sentence):

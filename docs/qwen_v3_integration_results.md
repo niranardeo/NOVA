@@ -1,169 +1,212 @@
 # Qwen V3 Integration Results
 
-**Real V3 end-to-end verification: BLOCKED BY MISSING INPUT.** No real V3 alert has been processed. Everything below is either code, synthetic data, or the older pre-V3 exports, and each is labelled as such.
+**The real V3 classifier-to-Qwen integration works on a bounded sample.** Twenty real alerts from Jenn's V3 validation exports went through the production consumer on the pinned model. Every identifier, predicted class and evidence value came back unchanged, and every final answer passed the automated checks. That says the pipeline is correct. It does not yet say the explanations are good: the human review has not been done, and a claim-by-claim check found recurring problems (section 8).
 
 | Question | Answer |
 |---|---|
-| Is the code ready for V3? | Yes, as far as it can be shown without V3 files |
-| Dataset version used in tests | Synthetic data with V3's columns, and `V2-LEGACY-REGRESSION` (older exports). Never real V3 |
-| Were real V3 alerts processed? | **No** |
-| Was the reserved test split used? | **No.** It was not read, loaded, hashed or inspected |
-| Is explanation quality evaluated? | **No.** Human review has not been done |
+| Real V3 alerts processed? | **Yes:** 20 of 126,498 (10 per classifier), chosen deterministically |
+| Pipeline verdict | `E2E PASS (NOT a verified V3 run)`. The suffix means no V3 CSV was read, so rows were not compared with the dataset |
+| Explained / abstained / rejected / failed | **8 / 12 / 0 / 0** |
+| Identifiers, classes and evidence preserved | **Yes, all 20**, checked independently against the source files |
+| Explanation quality | **Not evaluated by people yet.** Provisional findings in section 8 |
+| Reserved test split | Not used, opened, hashed or listed |
 
-## 1. What is missing for the real V3 test
+## 1. Inputs
 
-| File | Owner | Why |
+| File | SHA-256 | Alerts |
 |---|---|---|
-| `decision_tree_alerts.json`, `random_forest_alerts.json` from one run on the complete validation file (or saved models or predictions to build them) | Jenn | Not in the repository: `outputs/` is ignored by Git, and her report keeps models local |
-| `cicids2017_V3_validation_15.csv` | Team share | Needed to check identity and row alignment. Not downloaded for this work |
-| `cicids2017_V3_train_70.csv` | Team share | Optional for the run, needed for full file identity |
-| Published SHA-256 of the two files | Kevin | Without it, a run can only be a profile match, not verified |
+| `NOVA_V3_Qwen_Integration_Handoff.zip` | `b62c2765cac8b308c9c9e6b0af10fc04d7e27d2a24bca61032a2afce07d91f87` | |
+| `decision_tree_v3_validation_alerts.json` | `207fd4be41de0637e3c79702b6b2dcf9154cb3b54bf2f2830e8f229f6197bfcd` | 63,453 |
+| `random_forest_v3_validation_alerts.json` | `0c3146909ca585eb62d156035668308cc71cea73b62b73b2a99954081dc05d31` | 63,045 |
 
-Once the exports and the validation CSV are available, this runs the bounded test:
+Both files: schema `1.1`, run `v3-validation-sample10-20261104`, dataset `CICIDS2017-V3-validation`, preliminary validation predictions from classifiers trained on a 10% sample (176,343 rows) of the V3 training set. The hashes were the same before and after every run, and the files are not in the repository. The dataset value is kept as Jenn wrote it.
 
-```bash
-python scripts/qwen_e2e_from_notebook.py --skip-notebook --data-dir "$V3_DIR"
-```
-
-## 2. Source revisions
+## 2. Code and model
 
 | Item | Value |
 |---|---|
-| `paul/qwen-integration-schema11` | `6bffaef271314e898476b4a82a38d6b873f1a393` |
-| `feature/data-exploration` | `7f069d34970b3a057f4e48f3978880382bb1f5bc` |
-| Common ancestor | `5cbbabc9ec29adf8fb2f6f1b507c9cbcce250118` |
-| Jenn's ZIP | `10f7a025…` Same contents as `7f069d3` by `diff -r`. A ZIP carries no Git history, so Git is the authority |
-| Jenn's report PDF | `bf07ac33…` |
+| Branch | `paul/qwen-integration-schema11` at `0fa9896`, plus the fixes in section 9 (uncommitted) |
+| Component | `nova_qwen` 0.2.0, prompt `nova-qwen-prompt-1.0` |
+| Model | `qwen3.5:4b-q4_K_M`, digest `d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04` (verified), Q4_K_M, 4.2B |
+| Runtime | Ollama 0.40.11 in Docker on a Mac, CPU only |
+| Settings | temperature 0, seed 42, thinking off, context 8,192, at most 512 output tokens, at most 2 attempts per alert |
 
-The update was built and tested on a merge of those two branches. They change no file in common.
+## 3. Export validation (before any model call)
 
-## 3. Jenn's reported results (supplied, not reproduced)
+All of these passed, using both the production `validate-export` and `correlate` commands and a separate checker that shares no code with the consumer:
 
-These are Jenn's preliminary results from her report. I have not reproduced them and do not replace them.
+- valid JSON, schema 1.1, the expected detector in each file, and identical `run_id`, `dataset` and `schema_version` in both;
+- every alert has the canonical `dt-`/`rf-` and `val-` identifiers, with matching numbers, and no duplicates;
+- positions are in 1–377,880 and strictly ascending; the last alert is at row 377,870;
+- no `Normal Traffic` predictions, and only the six attack classes;
+- every alert has exactly the three approved evidence features, all finite numbers; Flow Duration is a whole number from 1 to 119,816,717;
+- an empty export with the same metadata produced zero results and never contacted the model.
 
-| | Decision Tree | Random Forest |
-|---|---|---|
-| Accuracy | 99.77% | 99.73% |
-| Macro F1 | 0.92 | 0.91 |
-| Bots recall / precision | 0.48 / 0.65 | 0.39 / 0.85 |
-| Web Attacks recall | 0.82 | 0.73 |
+| Cross-classifier comparison | Records |
+|---|---:|
+| Flagged by both | 62,858 |
+| … same predicted class | 62,849 |
+| … different predicted class | 9 |
+| Decision Tree only | 595 |
+| Random Forest only | 187 |
+| Flagged by either | 63,640 |
+| Flagged by both, but evidence differs | 0 |
 
-Trained on 176,343 of 1,763,436 rows and evaluated on all 377,880 validation rows. The report's numbers agree with each other: macro F1 recomputed from the per-class values gives 0.919 and 0.907.
+This reproduces the counts in the independent preflight review exactly. The 9 disagreements are Bots vs Port Scanning (4), DoS vs Port Scanning (4) and DoS vs Brute Force (1).
 
-## 4. Notebook findings (for Jenn to confirm)
+**Limitation.** Without `cicids2017_V3_validation_15.csv` I could not check that each alert's evidence equals its row in the dataset. Jenn's README says this check passed on her side. Structural validity is proven here; dataset alignment is not.
 
-I did not edit the notebook or question the results. These are the differences between the committed notebook and the report.
+## 4. Tests
 
-**A. Stale outputs.** Commit `06eb726` changed only path strings in cells 2, 17 and 21. The saved outputs still show the old rows (1,764,525 / 378,113 / 176,452), so the committed outputs are not the V3 run. The source now names V3 files under `/media/sf_NOVA_Data`.
-
-**B. Sampling.** The report describes class-stratified reservoir sampling. The notebook uses `train_test_split(train_size=0.10, stratify=...)` and has no reservoir, `chunksize` or `joblib` code. On the class counts printed by notebook 04, a real `train_test_split` gives Normal 146,593 and Brute Force 641; the report has 146,594 and 640, which equals rounding 10% per class. That rests on notebook 04's counts, and one row of difference would also explain it, so `check-dataset` on the real file settles it.
-
-**C. `n_jobs`.** The report says 1 for Random Forest. The notebook says 2 in cell 30, and 1 appears nowhere. On synthetic numbers, both settings gave identical predictions, so this may not change results, but only Jenn can confirm what ran.
-
-**D. Clean run.** Cell 12 fits a Decision Tree on the full training file, then cells 19 and 24 refit on the sample. Cells 11–15, 28, 33 and 34 never ran in the saved copy, and the execution counter resets at cell 21. The unmodified notebook does run top to bottom in Docker on labelled synthetic data (40,000 / 8,000 rows; 1,642 and 1,645 alerts), so its code works. This cannot show it reproduces the report: the exact V3 code is still needed from Jenn.
-
-**E. Dataset identity.** Cell 34 hardcodes `dataset="CICIDS2017"`, so V2 and V3 exports look the same. I recommend `CICIDS2017-V3`, pending a team decision. The schema only requires a non-empty string, so the consumer accepts either, and my run reports record the V3 identity separately from the files. Nobody's exports are rewritten.
-
-## 5. What changed
-
-Only Qwen-owned files changed. `src/alert_adapter.py`, `tests/test_alert_adapter.py`, the notebooks, `docs/alert_schema.md`, `docs/baseline_experiment_results.md` and `docs/qwen_evaluation_criteria.md` are byte-identical to `origin/feature/data-exploration`.
-
-| Defect, reproduced before the fix | Now |
+| Category | Result |
 |---|---|
-| `--limit -1` sent 8 of 10 alerts, exit 0, `E2E PASS` | Refused before any request |
-| `--limit 100000` accepted | More than 25 per classifier needs `--allow-large-run` |
-| Every answer rejected printed `E2E PASS`, exit 0 | `E2E REJECTED_ANSWERS`, exit 1 |
-| Unknown alert prefix silently ignored | Refused |
-| Old file names demanded, with V3 files present | V3 is the default; no fallback; the paths and identity are recorded |
-| Stale notebook record credited to other exports | Counted only if its export hashes match |
+| Jenn's adapter tests (`unittest`) | **PASS** 12 of 12 |
+| Offline suite, macOS, Python 3.13.7 | **PASS** 977 passed (965 Qwen tests and Jenn's 12), 0 failed, 11 skipped (the live tests), 12 subtests |
+| Offline smoke | **PASS** 7 of 7 |
+| Model and digest check | **PASS** |
+| Live suite against Ollama | **PASS** 11 of 11, 0 skipped |
+| Live smoke | **PASS** 12 of 12 |
+| Export validation (CLI and independent checker) | **PASS** both files |
+| Cross-classifier correlation (CLI and independent checker) | **PASS**, counts agree |
+| Real V3 bounded inference | **PASS** 20 of 20 processed, 0 rejected, 0 failed |
+| Independent result verification (`verify`) | **PASS** 10 of 10 per classifier |
+| Independent end-to-end check against the source files | **PASS** 20 of 20, 0 problems |
+| Worksheet generation (script and CLI) | **PASS** 20 rows |
+| Ubuntu 24.04 container, non-root, Python 3.12.3 | **PASS** 12 of 12 (Jenn's), 977 passed and 11 skipped, smoke 7 of 7 |
+| Alignment against the V3 validation CSV | **BLOCKED**: CSV not available |
+| Docker image `nova-qwen:0.2` rebuilt with the fixes | **NOT TESTED** |
+| Windows, GPU, an Ubuntu VM, Jenn's VM | **NOT TESTED** |
 
-Added: dataset and alignment checks (`check-dataset`, `check-alignment`), representative bounded selection, the verdict logic, `scripts/qwen_export_v3_alerts.py` (saved models or predictions to exports through the unmodified adapter), `scripts/qwen_make_synthetic_demo.py`, the worksheet columns, and the team docs.
+All of these ran on the final code; its hash was the same before and after. Before the fixes, the pushed commit gave 939 passed, 11 skipped, and Jenn's 12 passed.
 
-## 6. Test results
+## 5. Sample
 
-Final code, frozen before these runs, except where the result says otherwise.
+Ten alerts per classifier: the representative selection (`--limit 8`) plus two more disagreement records requested by ID. Nothing is random, so the same command picks the same alerts.
 
-| Group | Test | Environment | Result |
-|---|---|---|---|
-| A | Jenn's 12 adapter tests, unmodified | macOS, Python 3.13 | **PASS** `Ran 12 tests`, `OK` |
-| A | Do those tests reach the branches they name? | Mutated copies of the adapter | **PASS with 2 gaps**: 7 of 9 removed branches caught. "No approved evidence features available" and the DataFrame `TypeError` are not |
-| B | Whole offline suite, in a fresh virtual environment | macOS, Python 3.13 | **PASS** `939 passed, 11 skipped, 12 subtests passed` |
-| B | Offline smoke | macOS | **PASS** `ALL PASS: 7/7` |
-| B | Mutation check of the Qwen guards | macOS | **PASS after closing survivors.** 176 guards removed one at a time, 173 caught, on the code just before the last small fixes. New tests close the 3 survivors. A re-check of those 3 and 4 new guards: all caught. The full 180 were not repeated on the frozen code |
-| C | Live suite against real Ollama | `qwen3.5:4b-q4_K_M`, digest verified | **PASS** `11 passed` in 6:01, including the production script on the synthetic demo |
-| C | Live smoke | Same | **PASS** `ALL PASS: 12/12` (explained 3, abstained 1, rejected 0, failed 0) |
-| C | Regression on older exports, 6 alerts per classifier | Same; **not V3** | **PASS on earlier code, NOT RE-RUN on the final code.** See section 7 |
-| C | Consumer on exports written by Jenn's notebook on **synthetic** data | Same; **not V3** | **NOT TESTED** |
-| D | Real V3, bounded | | **BLOCKED BY MISSING INPUT** |
-| E | Ubuntu 24.04 container, clean copy, non-root | Docker on macOS (arm64) | **PASS** `939 passed, 11 skipped, 12 subtests passed`, `ALL PASS: 7/7`, Python 3.12 |
-| E | Run as root | Same | `928 passed, 22 skipped, 12 subtests passed` (the 11 extra skips are file-permission tests) |
-| E | Docker image, default offline command | `nova-qwen:0.2`, Python 3.12 | **PASS** `927 passed` (`tests/qwen` only). Build and `docker compose config` also pass |
-| E | Live smoke inside the image | Same | **NOT TESTED** on the final image |
-| E | Walkthrough, every command run literally | Clean copy | **NOT TESTED** as a literal run. Its real-model step is covered by the live suite's synthetic demo test |
-| | Windows, native GPU, Ubuntu VM | | **NOT TESTED** |
-| | Jenn's real VM (low-memory export route) | | **NOT TESTED** |
+| Record | Flow Duration (s) | Fwd packets | Bytes/s | Decision Tree | Random Forest | Why chosen |
+|---|---:|---:|---:|---|---|---|
+| `val-000001` | 0.145596 | 3 | 79,899.17 | DDoS: explained | DDoS: abstained | class |
+| `val-000003` | 85.492058 | 10 | 144.05 | DoS: abstained | DoS: abstained | class |
+| `val-000011` | 0.000015 | 1 | 400,000 | Port Scanning: explained | Port Scanning: abstained | class |
+| `val-000017` | 99.179788 | 7 | 120.62 | DoS: abstained | — | fill |
+| `val-000330` | 5.446992 | 3 | 0 | Web Attacks: abstained | Web Attacks: abstained | class |
+| `val-000440` | 10.674295 | 5 | 384.10 | — | DoS: abstained | Random Forest only |
+| `val-000862` | 0.071796 | 4 | 4,791.35 | Bots: explained | Bots: explained | class |
+| `val-015887` | 0.000267 | 2 | 52,434.46 | DoS: abstained | Brute Force: abstained | disagreement; class (Brute Force, Random Forest) |
+| `val-023930` | 109.698999 | 2 | 0.13 | Bots: explained | Port Scanning: abstained | disagreement |
+| `val-036230` | 0.00096 | 2 | 0 | DoS: explained | Port Scanning: explained | disagreement |
+| `val-166456` | 119.816717 | 16 | 28.85 | Brute Force: explained | — | longest flow; Decision Tree only; class |
+| `val-223443` | 119.794368 | 18 | 47.80 | — | DoS: abstained | longest Random Forest flow |
 
-Skips: the 11 skipped tests are the opt-in live tests, which ran separately above.
+Covered: all six classes, three of the nine disagreements, one record flagged by each classifier alone, the longest flows (just under the 120-second flow timeout) and several sub-millisecond flows. The selection has no shortest-flow rule; the exports go down to 1 microsecond. There are no negative durations in these exports. **This is a test of the pipeline, not a measurement:** 20 hand-chosen alerts give no rate for anything.
 
-Three rounds of adversarial review were run against this code. All findings from the first two rounds were fixed. The third was stopped early: its three medium findings and one test that could not fail are fixed; the remaining low-severity items are in section 11. Its refutation step did not finish, so those findings were not independently confirmed.
-
-## 7. Regression on older exports (`V2-LEGACY-REGRESSION`, not V3)
-
-This shows the pipeline works on real classifier output at real size. **It says nothing about V3.** These files predate V3 and have a different class mix.
-
-This run used the code as it stood before the last two review rounds, and was not repeated on the final code. Those rounds did not change prompts, validation rules or model settings. Only 12 of 126,789 alerts were sent.
+## 6. Results
 
 | | Explained | Abstained | Rejected | Failed |
-|---|---|---|---|---|
-| Decision Tree (63,465 alerts in export, 6 sent) | 4 | 2 | 0 | 0 |
-| Random Forest (63,324 alerts in export, 6 sent) | 1 | 5 | 0 | 0 |
+|---|---:|---:|---:|---:|
+| Decision Tree | 6 | 4 | 0 | 0 |
+| Random Forest | 2 | 8 | 0 | 0 |
+| **Total** | **8** | **12** | **0** | **0** |
 
-- **Verdict:** `E2E PASS (NOT a verified V3 run)`. Every alert's evidence matched its row in the older validation CSV.
-- **Correlation:** both, same class 63,032; both, different class 22; Decision Tree only 411; Random Forest only 270.
-- **Bots:** `dt-006266` explained, `rf-006266` abstained. **Web Attacks:** `dt-002126` and `rf-002126` both abstained. One or two alerts per class is an observation, not a rate.
-- **Latency:** 16–118 s per alert on CPU, while another heavy job was competing for the machine, so treat this as an upper range. The usual figure unloaded is about 25 s.
+- **Traceability.** For all 20, the run ID, dataset, detector, record ID, alert ID, predicted class and raw evidence equal the source file. Qwen never changed a prediction or an identifier.
+- **Units.** Flow Duration was converted from microseconds to seconds in Python for all 20, exactly (for example 15 → 0.000015 s, 119,816,717 → 119.816717 s), with the raw value kept beside it. Every answer quoted durations in seconds. The microseconds convention itself is still **unconfirmed** (section 10).
+- **Priority.** `null` in all 20.
+- **Re-asks.** Four first answers were rejected and re-asked, and all four second answers were accepted. Three of the four first answers included a calculated rate ("approximately 80 kilobytes per second" twice, "approximately 0.47 packets per second"), and one gave an invented payload size, "approx. 400KB". For one packet at 400,000 bytes per second over 0.000015 s, the real amount is about 6 bytes.
+- **Repeatability.** The same 20 alerts were run three times (pushed code, after the first fixes, final code). Every first answer was byte-identical in all three runs. The only differences are that the fixed validator re-asked `rf-000011` and accepted `rf-000330` the first time.
+- **Latency (final run).** 24 model requests, 13.4–20.1 s each (median 15.8 s, mean 15.9 s). Per alert, including a re-ask: 14.7–36.7 s (median 16.0 s, mean 19.1 s). The whole run took 6 min 24 s. An earlier run of the same sample averaged 18.6 s per request, so expect some variation. At the final run's rate, explaining all 126,498 alerts one after another on this machine would take about 28 days, or about 23 if no alert needed a re-ask. Four re-asks in 20 hand-chosen alerts is not a measured re-ask rate.
 
-## 8. Evidence units
+## 7. Abstention
 
-The conversion is unchanged: Flow Duration is treated as microseconds and shown in seconds, Total Fwd Packets as a count, Flow Bytes/s as bytes per second. Raw values are preserved next to the converted ones. **The V3 unit assumption requires confirmation from Kevin.** Notebooks 03 and 04 only remove rows, but no notebook shows how `WHOLE_SET` became `_V2`. `check-dataset` flags implausible values but cannot prove a unit.
+12 of 20 answers abstained (4 Decision Tree, 8 Random Forest). The abstentions are the model's own choice; the validator rejected none of the final answers. Two findings matter for the report:
 
-## 9. Traceability
+- **Abstaining did not mean declining to interpret.** Every abstained answer still interpreted the evidence: for example "consistent with a slow, sustained attack pattern", or "suggests a potential false positive".
+- **Abstaining depends on the classifier's name, not only the evidence.** For the same row and the same predicted class, the prompt differs only in the classifier name. On 2 of the 5 such pairs, the model explained for one and abstained for the other (`val-000001` DDoS, `val-000011` Port Scanning). The answer texts were often nearly identical.
 
-Every result keeps `alert_id`, `record_id`, `detector`, `run_id`, predicted class and raw evidence exactly as exported, plus the source export hash. `verify` recomputes them from the export. `check-alignment` confirms each alert's evidence equals the CSV at its `record_id`. Rows without an alert cannot be compared, so a pass does not prove the frame was complete. For V3, an alert-free tail too long to be chance is also a failure.
+So the abstention count should be reported, but not read as a measure of evidence quality. I did not change the prompt to reduce abstentions: a prompt change would need the team's agreement and a re-run.
 
-## 10. What these results do and do not show
+## 8. Explanation quality (provisional)
+
+**The 0–2 human scores have not been given.** What follows are objective checks against the source evidence, plus my provisional notes. The human review in the worksheet decides quality.
+
+**What held in all 20 answers:**
+- every value quoted was supplied or a correct rounding of it ("approx 0.13 bytes/s" for 0.127621948);
+- no IP address, port, protocol, TCP flag or payload was asserted as present (several were listed as unavailable, which is correct);
+- no answer stated an attack as confirmed;
+- every answer gave specific limitations: three features only, no packet contents, no surrounding traffic, no ground truth.
+
+**What went wrong, and was not caught by any rule:**
+
+The counts below come from a claim-by-claim check of all 20 answers against the evidence, with a second pass that challenged the first. They are provisional: they find problems but do not score quality.
+
+| Problem | Answers | Examples |
+|---|---:|---|
+| Relies on an outside baseline ("typical", "usually", or calling a value "high" or "low" with nothing to compare it to) | 18 | "atypical for most DoS attacks, which usually involve high volume" (`dt-000003`) |
+| Says why the classifier predicted the class, though no model internals were supplied | 20 | Every answer opens "The classifier predicted '<class>' based on …"; also "the model associates this specific combination with DDoS" (`dt-000001`) |
+| Names a technique or pattern that is not in the evidence | 9 | "slowloris or targeted probing" (`dt-000017`); "beaconing" (`dt-023930`); "reconnaissance" (`rf-000003`) |
+| Describes a byte rate as an amount | 5 | Clear in 2: "significant volume transferred in that instant" (`rf-015887`) and "rapid, high-volume bursts" (`dt-015887`), for about 14 bytes. Borderline in 3: "a large amount of data" (`dt-000001`) and "a single large transfer" (`rf-000001`), both for about 11.6 KB, and "byte volume" for a rate (`rf-000440`) |
+| Contradicts itself | 4 | "many short connections" for one 120-second flow (`dt-166456`); arguing for and against a DoS fit in the same answer (`dt-000003`) |
+| Leans past the evidence | 8 | "a slow, automated probe attempting to map services rather than legitimate communication" (`rf-023930`) |
+
+Several answers also call Total Fwd Packets the flow's packet count, although it counts forward packets only. Most of these are mild, and every answer still ends by saying the prediction is unverified. Even so, a reader could take the general-knowledge statements as findings about this flow. The reviewers should look for that first.
+
+**Bots and Web Attacks** (the classes with the weakest recall in Jenn's results): none of the three Bots answers or the two Web Attacks answers mentioned URLs, payloads or command-and-control traffic as observed. The Bots answers did use general patterns, though ("beaconing", "rapid scanning or automated probing"), and one Web Attacks answer named "slowloris or connection floods". Nothing Qwen writes about these rows changes the classifiers' recall.
+
+## 9. Defects found by the real run, and fixes
+
+Each fix has a regression test that fails on the pushed code and passes now. Replaying all 68 distinct real answers saved during testing (25 from the two real V3 runs) through the fixed validator changes exactly two verdicts: the first two below.
+
+| Defect | Cause | Fix |
+|---|---|---|
+| "approx. 400KB" accepted (`rf-000011`) | A number glued to a unit, such as `400KB` or `0.47pps`, was never read as a number | `src/nova_qwen/response.py`: such numbers are checked like any other; ordinals such as "1st" are not quantities |
+| "a potential false positive or an anomaly rather than confirmed malicious activity" rejected (`rf-000330`) | A confirmation word right after "rather than" was read as a claim | `src/nova_qwen/response.py`: a confirmation word right after "rather than" is read as denied; "rather than" excuses nothing else in the clause |
+| `summary.json` recommended `CICIDS2017-V3` although the exports say `CICIDS2017-V3-validation` | The note predated Jenn's label | `scripts/qwen_e2e_from_notebook.py`: a label that names V3 is accepted as it is; only a label that does not name V3 gets a note |
+
+A review of these fixes found four more gaps of the same kind, fixed the same way and tested: a number glued to a unit right after a feature name ("Flow Bytes/s is 1B/s") is now compared with that feature's value; rank statistics such as "99th percentile" are rejected as invented; `CICIDS2017V3` counts as naming V3, and `CICIDS2017V2` is refused for a V3 run; and "μsecs" is read as microseconds. None of them occurred in the real answers.
+
+The export bridge's examples now use Jenn's label as well. No defect was found in Jenn's adapter or exports.
+
+## 10. Classifier disagreements
+
+Qwen handles each alert on its own and never sees the other classifier's prediction. So it cannot compare them, and it did not try to name a winner. For the three disagreement records processed:
+
+| Record | Evidence | Decision Tree | Random Forest |
+|---|---|---|---|
+| `val-015887` | 0.000267 s, 2 packets, 52,434 bytes/s | DoS: abstained. "consistent with a DoS prediction only if the model associates rapid, high-volume bursts with denial-of-service patterns" | Brute Force: abstained. "atypical for sustained brute-force attempts", and "significant volume transferred in that instant" (wrong: about 14 bytes) |
+| `val-023930` | 109.7 s, 2 packets, 0.13 bytes/s | Bots: explained. "bot-like behavior, which often involves slow, low-volume scanning or beaconing" | Port Scanning: abstained. "a slow, automated probe attempting to map services rather than legitimate communication" |
+| `val-036230` | 0.00096 s, 2 packets, 0 bytes/s | DoS: explained. "possibly indicating a probe or initial phase of an attack" | Port Scanning: explained. "rapid connection attempts without successful data exchange" |
+
+- **Both predictions stayed separate.** Each result keeps its own alert ID and predicted class, and the worksheet groups the pair by record so a reviewer can compare them.
+- **On two of the three, each answer made its own label sound plausible.** On `val-023930`, identical evidence is "bot-like" beaconing for one answer and a "slow, automated probe" for the other. On `val-036230`, the same zero-byte, 2-packet flow is "a probe or initial phase of an attack" for one label and "rapid connection attempts without successful data exchange" for the other. The exception is `val-015887`, where both answers abstained and doubted their label. That is the main limitation of this design: the explanation follows the label it is given.
+- **Did the answers acknowledge the limits?** Yes. All six said the evidence cannot establish an attack, and listed what is missing.
+- **Could this help an analyst?** Side by side, the pair shows that the same three values fit two stories. That is a useful warning, but it does not resolve anything.
+- **What would resolve it:** the true label of the record (available to Jenn in the validation CSV, never to Qwen), plus evidence these three features do not include: destination ports contacted, TCP flags, backward packets and timing between packets. Those would need a separate, approved feature change.
+
+## 11. What these results do and do not show
 
 | Question | Status |
 |---|---|
-| Classifier performance | Jenn's preliminary results. Qwen does not change any prediction |
-| Explanation correctness and usefulness | **Not evaluated.** Needs the human review in `docs/qwen_review_rubric.md` |
-| Evidence grounding | Automated checks catch common errors. They cannot judge whether an explanation is sensible |
-| Prioritization | **Not measured.** `priority` stays `null`, because no policy is approved |
-| Abstention | Counted separately. Rates on old exports say nothing about V3 |
-| Latency | Section 7. CPU only, small samples |
+| Classifier performance | Jenn's preliminary validation results: DT accuracy 99.77%, RF 99.73%. Not reproduced here; Qwen changes no prediction |
+| Pipeline correctness | **Shown** on 20 real alerts |
+| Explanation correctness, grounding, usefulness | **Not evaluated by people.** Provisional findings in section 8 |
+| Prioritization | Not measured: `priority` stays `null` |
+| Latency | Section 6 |
+| Effect on false positives or false negatives | **Not shown, and not claimed.** Qwen explains alerts already raised, so it cannot recover a missed attack. It explains true and false positives alike, and sees no labels |
 
-- **Qwen cannot recover a false negative.** It receives only alerts the classifiers raised. A missed attack is classified as normal and never reaches it.
-- **Good explanations are not evidence of fewer false positives or false negatives.** Qwen explains true and false positives alike, filters nothing, and sees no labels.
-- **Bots and Web Attacks** have the weakest recall in Jenn's report, so the worksheet flags those rows for reviewers: three flow features cannot show payloads, URLs or command-and-control behaviour. Whatever Qwen says about these rows does not improve that recall.
-- **No final test performance is claimed.** The reserved test split stays closed until the configuration is frozen.
+No result here comes from the reserved test split, and no final performance is claimed.
 
-## 11. Known limitations
+## 12. Known limitations
 
-- **General-knowledge statements pass the checks.** Real answers said things like "contradicts typical web attack patterns involving active data exfiltration or scanning". These are not numbers or invented fields, so the rules let them through. A reviewer has to catch them.
-- **Abstention can differ by classifier for the same flow**, including when both predict the same class. Treat it as model behaviour, not a finding about the classifiers.
-- **Low-severity items left open from the last review:**
-  - A results file edited by hand can still cause a traceback in `explain --resume` (malformed `alert_id`, `attempts` or `selection` fields). The end-to-end script reports `E2E FAILED: unexpected error` instead.
-  - A lone surrogate arriving as a real character, rather than as an escape, ends the run with an error instead of being rejected as one answer.
-  - Closing the terminal (SIGHUP) during an export can leave a hidden `.export-staging-*` folder, as a hard kill can. Nothing reads it.
-  - A test-like `--out` is refused with a message about reading a test split, and `check-dataset` and `check-alignment` only refuse it after printing their report.
-  - A notebook-mode stop after the notebook has started can show a last line such as `E2E NOT RUN` next to a `summary.json` saying INCOMPLETE.
-  - `--notebook-only` drops `--limit`, `--select` and `--alert-id` from the command it prints.
-  - A few of the newest guards have no test that fails if they are removed (for example, a new test-like `--out` on the report commands).
+- **No dataset alignment check** (section 3), so the run is labelled "NOT a verified V3 run".
+- **Units are a provisional assumption.** The exports are consistent with microseconds (the longest flow is just under the 120-second timeout), but Kevin has not confirmed the V3 preprocessing.
+- **Small, hand-chosen sample.** It cannot give rates for explanation quality, abstention or errors.
+- **Pattern-based checks.** They catch invented numbers and asserted protocols, not wrong reasoning in words.
+- **CPU only.** About 16–19 s per request, so only bounded samples are practical.
+- **Results files name the input link.** The run reads the handoff files through links named `decision_tree_alerts.json` and `random_forest_alerts.json` (see the testing guide). The recorded SHA-256 identifies Jenn's files.
 
-## 12. Remaining work
+## 13. Remaining work
 
-1. Jenn: V3 exports or saved models, and the code behind her reported results.
-2. Kevin: SHA-256 values and unit confirmation.
-3. Team: decide the `dataset` value.
-4. Me: run the bounded V3 test, and add the real V3 results here.
-5. Team: human review with the worksheet.
+1. Jenn: the alignment check output (or the V3 CSV), and the true labels of the 9 disagreement records.
+2. Kevin: SHA-256 of the two approved files, and confirmation of the units.
+3. Team: human review of the 20 rows with `docs/qwen_review_rubric.md`.
+4. Team: decide whether the report should interpret abstention at all (section 7).
+5. Me: rerun this exact sample after any prompt or validator change, so results stay comparable. To reproduce it, see the testing guide, step "6c (handoff)".
