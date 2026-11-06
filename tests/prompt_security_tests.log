@@ -1,0 +1,37 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.2.0, pluggy-1.7.0 -- /home/nira/NOVA-main/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/nira/NOVA-Qwen-Security
+collecting ... collected 29 items
+
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[101041626.0-101.041626-101.041626] PASSED [  3%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[116827162.0-116.827162-116.827162] PASSED [  6%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[119989925.0-119.989925-119.989925] PASSED [ 10%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[67.0-0.000067-6.7e-05] PASSED [ 13%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[21760.0-0.02176-0.02176] PASSED [ 17%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[5000000-5-5.0] PASSED [ 20%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[0.0-0-0.0] PASSED [ 24%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[-1.0--0.000001--1e-06] PASSED [ 27%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[1-0.000001-1e-06] PASSED [ 31%]
+tests/qwen/test_features_prompt.py::test_flow_duration_microseconds_to_seconds[120000000000.0-120000-120000.0] PASSED [ 34%]
+tests/qwen/test_features_prompt.py::test_other_features_keep_their_values[Total Fwd Packets-11.0-11-packets] PASSED [ 37%]
+tests/qwen/test_features_prompt.py::test_other_features_keep_their_values[Total Fwd Packets-4062-4062-packets] PASSED [ 41%]
+tests/qwen/test_features_prompt.py::test_other_features_keep_their_values[Total Fwd Packets-1.5-1.5-packets] PASSED [ 44%]
+tests/qwen/test_features_prompt.py::test_other_features_keep_their_values[Flow Bytes/s-123.7509776-123.7509776-bytes per second] PASSED [ 48%]
+tests/qwen/test_features_prompt.py::test_other_features_keep_their_values[Flow Bytes/s-0.154073759-0.154073759-bytes per second] PASSED [ 51%]
+tests/qwen/test_features_prompt.py::test_other_features_keep_their_values[Flow Bytes/s-1e-07-0.0000001-bytes per second] PASSED [ 55%]
+tests/qwen/test_features_prompt.py::test_normalize_rejects_non_numbers[nan] PASSED [ 58%]
+tests/qwen/test_features_prompt.py::test_normalize_rejects_non_numbers[inf] PASSED [ 62%]
+tests/qwen/test_features_prompt.py::test_normalize_rejects_non_numbers[True] PASSED [ 65%]
+tests/qwen/test_features_prompt.py::test_normalize_rejects_non_numbers[100] PASSED [ 68%]
+tests/qwen/test_features_prompt.py::test_normalize_rejects_non_numbers[None] PASSED [ 72%]
+tests/qwen/test_features_prompt.py::test_normalize_evidence_keeps_allowlist_order_and_raw_values PASSED [ 75%]
+tests/qwen/test_features_prompt.py::test_data_quality_notes_fire_only_for_implausible_values PASSED [ 79%]
+tests/qwen/test_features_prompt.py::test_prompt_carries_units_but_no_identifiers_or_raw_microseconds PASSED [ 82%]
+tests/qwen/test_features_prompt.py::test_data_quality_note_is_passed_to_the_model PASSED [ 86%]
+tests/qwen/test_features_prompt.py::test_response_schema_restricts_evidence_used_to_supplied_features PASSED [ 89%]
+tests/qwen/test_features_prompt.py::test_budget_accepts_a_real_alert_with_room_for_one_re_ask PASSED [ 93%]
+tests/qwen/test_features_prompt.py::test_budget_refuses_requests_that_could_be_truncated PASSED [ 96%]
+tests/qwen/test_features_prompt.py::test_budget_counts_bytes_not_characters PASSED [100%]
+
+============================== 29 passed in 0.06s ==============================

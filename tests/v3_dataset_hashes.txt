@@ -1,0 +1,2 @@
+47c4260a0c0ea06b9998634eea09be4ea4beffc26d423a1723e22a0e10582d12  /home/nira/NOVA-data/cicids2017_V3_train_70.csv
+4e9943a5c2a99970a8c05e6e6d8ab7840b2a8c3bdf911e7d5d4eff2616d6530c  /home/nira/NOVA-data/cicids2017_V3_validation_15.csv
