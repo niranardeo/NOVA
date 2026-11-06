@@ -1,0 +1,21 @@
+test_alert_traceability_fields (test_alert_adapter.TestAlertAdapter.test_alert_traceability_fields) ... ok
+test_decision_tree_alerts (test_alert_adapter.TestAlertAdapter.test_decision_tree_alerts) ... ok
+test_failed_json_write_preserves_existing_file (test_alert_adapter.TestAlertAdapter.test_failed_json_write_preserves_existing_file) ... ok
+test_ground_truth_rejected_with_zero_alerts (test_alert_adapter.TestAlertAdapter.test_ground_truth_rejected_with_zero_alerts) ... ok
+test_invalid_detector (test_alert_adapter.TestAlertAdapter.test_invalid_detector) ... ok
+test_invalid_traceability_metadata_rejected (test_alert_adapter.TestAlertAdapter.test_invalid_traceability_metadata_rejected) ... ok
+test_mismatched_rows (test_alert_adapter.TestAlertAdapter.test_mismatched_rows) ... ok
+test_missing_or_infinite_evidence (test_alert_adapter.TestAlertAdapter.test_missing_or_infinite_evidence) ... ok
+test_none_evidence_rejected (test_alert_adapter.TestAlertAdapter.test_none_evidence_rejected) ... ok
+test_nonnumeric_evidence_rejected (test_alert_adapter.TestAlertAdapter.test_nonnumeric_evidence_rejected) ... ok
+test_random_forest_alerts (test_alert_adapter.TestAlertAdapter.test_random_forest_alerts) ... ok
+test_unapproved_evidence_excluded (test_alert_adapter.TestAlertAdapter.test_unapproved_evidence_excluded) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.019s
+
+OK
+decision_tree: exported 1 alerts to /tmp/tmplppcd5pb/alerts.json
+decision_tree: exported 1 alerts to /tmp/tmpo4yhhp7b/dt.json
+random_forest: exported 2 alerts to /tmp/tmpxcidgvln/rf.json
+random_forest: exported 1 alerts to /tmp/tmpq0i7qkj8/alert.json
