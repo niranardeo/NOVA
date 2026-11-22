@@ -1,0 +1,8 @@
+# Offline and live tests for the Qwen consumer:
+#   python -m pip install -r requirements-qwen-dev.txt
+#   python -m pytest -p no:cacheprovider tests/qwen
+# pandas/numpy are needed by the tests that drive the team's src/alert_adapter.py; versions match the
+# team's classifier stack (requirements.txt on main).
+pytest==9.2.0
+pandas==3.0.3
+numpy==2.4.6
