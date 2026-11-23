@@ -189,7 +189,7 @@ It writes `outputs/decision_tree_alerts.json`, `outputs/random_forest_alerts.jso
 
 **Route 2: your own notebook run.** Run the export cell at the end of notebook 03 after the models are trained. Keep `X_val` complete and in file order.
 
-**Route 3: execute notebook 03 as committed (about 6 GB of memory with Ollama stopped).** It reads `/media/sf_NOVA_Data`, so that path must exist. This is not the sampler in Jenn's report (`train_test_split` and `n_jobs=2`, against reservoir sampling and `n_jobs=1`), so treat the result as a separate reproduction, not her experiment. It does not fit Jenn's VM (about 1.4 GiB RAM plus 2 GiB swap); use Route 1 there. On a machine with enough memory where that path exists:
+**Route 3: execute notebook 03 as committed (about 6 GB of memory with Ollama stopped).** It reads `/media/sf_NOVA_Data`, so that path must exist. This is not the configuration that produced Jenn's reported models (`train_test_split` and `n_jobs=2`, against per-class 10% sampling and `n_jobs=1`, confirmed from her saved models), so treat the result as a separate reproduction, not her experiment. It does not fit Jenn's VM (about 1.4 GiB RAM plus 2 GiB swap); use Route 1 there. On a machine with enough memory where that path exists:
 
 ```bash
 python -m pip install -r requirements-qwen-e2e.txt

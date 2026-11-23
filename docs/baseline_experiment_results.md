@@ -26,7 +26,7 @@ These results are not full-training or reserved-test results.
 | Official validation records | 377,880 |
 | Input features | 52 |
 | Traffic classes | 7 |
-| Sampling method | Stratified train_test_split (train_size=0.10, stratify=y_train) |
+| Sampling method | Per-class 10% sampling of the official V3 training split |
 | Sampling random seed | 42 |
 | Missing values in saved training sample | 0 |
 
@@ -57,11 +57,13 @@ during model evaluation.
 | Minimum samples per leaf | 10 | 10 |
 | Number of trees | 1 | 50 |
 | Random state | 42 | 42 |
-| Parallel jobs | N/A | 2 |
+| Parallel jobs | N/A | 1 |
 | Training records | 176,343 | 176,343 |
 
-The Random Forest was configured with `n_jobs=2`, matching the
-committed classifier notebook. Training used the 10% stratified sample.
+The saved V3 Random Forest artifact confirms `n_jobs=1`. Both models
+used the per-class 10% V3 training sample. The committed notebook
+contains outputs from an earlier dataset and does not document the
+original V3 training execution.
 
 ## 4. Validation Results
 

@@ -19,7 +19,7 @@
 
 - **Kevin: units.** Do `WHOLE_SET`, `V2` and `V3` keep CICFlowMeter's units unchanged (Flow Duration in microseconds, Total Fwd Packets as a count, Flow Bytes/s in bytes per second)? The data is consistent with that, and the report states it as an assumption otherwise.
 - **The test split.** In `V3_Stratified_Split`, the held-out file is called `cicids2017_V3_initial_test_15.csv`, not `cicids2017_V3_test_RESERVED_15.csv` as in Kevin's notebook 04 (on `main`). The tools refuse it by name. Please make sure nobody opens it before the final evaluation.
-- **Jenn: training code.** For reproducibility, commit the code that trained the reported models (the report describes reservoir sampling and `n_jobs=1`; the committed notebook uses `train_test_split` and `n_jobs=2`). This does not affect the integration.
+- **Jenn: training code.** Resolved on 23 Nov 2026: the saved V3 models confirm per-class 10% sampling and Random Forest `n_jobs=1`, as in the original report. The committed notebook (`train_test_split`, `n_jobs=2`) did not produce the reported run. Committing the actual training script would still help reproducibility, but it does not affect the integration.
 - **Jenn: two adapter tests**, for the "No approved evidence features available" branch and the "features must be a pandas DataFrame" `TypeError`. All 12 tests still pass with either branch removed. Also, `docs/qwen_evaluation_criteria.md` section 7 still says seven tests and that Qwen integration has not been performed.
 
 ## Paul (me)
