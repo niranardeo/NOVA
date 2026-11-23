@@ -1,0 +1,5 @@
+# NOVA Qwen consumer (src/nova_qwen) - runtime requirements.
+# The consumer uses ONLY the Python standard library (tested on Python 3.12 and 3.13).
+# It talks to a separately installed Ollama server (https://ollama.com), model qwen3.5:4b-q4_K_M.
+# Nothing to install here; this file exists so `pip install -r requirements-qwen.txt` is a valid no-op
+# and the dependency decision is explicit.
