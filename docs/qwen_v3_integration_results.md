@@ -80,7 +80,7 @@ A row without an alert was predicted Normal Traffic. Comparing the full predicti
 | Web Attacks recall | 0.82 → 0.823 | 0.73 → 0.730 |
 | Attacks missed (false negatives) / normal rows flagged (false positives) | 552 / 255 | 851 / 146 |
 
-The baseline methodology documentation has been corrected to match the committed classifier notebook: stratified `train_test_split` with `train_size=0.10`, `stratify=y_train`, and `random_state=42`, and Random Forest `n_jobs=2`. The documentation discrepancy is resolved, but full training reproducibility has not been independently reverified. The previously recorded validation predictions and Qwen integration results remain unchanged.
+The baseline methodology documentation has been corrected to match the committed classifier notebook: stratified `train_test_split` with `train_size=0.10`, `stratify=y_train`, and `random_state=42`, and Random Forest `n_jobs=2`. One detail is still open: the sampled class counts listed there (Normal Traffic 146,594, Brute Force 640) are 10% of each class rounded, while that `train_test_split` call gives 146,593 and 641 on the V3 training counts, for any seed. Which code produced the reported run is therefore still to be confirmed, and full training reproducibility has not been independently reverified. The previously recorded validation predictions and Qwen integration results remain unchanged.
 
 ## 5. Tests
 

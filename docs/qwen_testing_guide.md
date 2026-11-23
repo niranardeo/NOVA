@@ -92,13 +92,13 @@ The smoke test should end with `ALL PASS: 7/7 checks passed`:
 python scripts/qwen_smoke.py
 ```
 
-Jenn's own tests. Expect `Ran 12 tests` and `OK`:
+Jenn's adapter tests and the baseline runner's tests. Expect `Ran 63 tests` and `OK`:
 
 ```bash
 python -m unittest discover -s tests
 ```
 
-Everything. Expect **`977 passed, 11 skipped, 12 subtests passed`**; the 11 skips are the opt-in live tests. If you run as root (some containers), 11 file-permission tests also skip, so 22 are skipped in all.
+Everything. Expect **`1028 passed, 11 skipped, 14 subtests passed`**; the 11 skips are the opt-in live tests. If you run as root (some containers), 11 file-permission tests also skip, so 22 are skipped in all.
 
 ```bash
 python -m pytest -p no:cacheprovider -q tests
