@@ -245,6 +245,7 @@ containing dataset and prediction information.
 - [Qwen Testing Guide](docs/qwen_testing_guide.md)
 - [Qwen V3 Results](docs/qwen_v3_integration_results.md)
 - [Qwen Review Rubric](docs/qwen_review_rubric.md)
+- Project plan and contributions (https://github.com/niranardeo/NOVA/blob/main/IT%20691%20Fa2026%20Capstone%20TEAM%201%20NOVA_Project_Plan_1123.xlsx)
 
 ## Project Status
 
