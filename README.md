@@ -22,7 +22,7 @@ NOVA investigates how effectively machine-learning models identify unusual netwo
 The prototype supports human decision-making without modifying original predictions or automatically responding to threats.
 
 ## Code Branch
-The integrated code and documentation were merged into the main branch through pull requests #95 and #96.
+The integrated code and documentation were merged into the main branch through pull requests #97.
 Commit: e03130c 
 
 ## System Architecture
