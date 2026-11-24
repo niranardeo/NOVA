@@ -287,6 +287,7 @@ containing dataset and prediction information.
 
 ## Project Documentation
 
+- [Technical Summary](https://github.com/niranardeo/NOVA/blob/402decdcd66d98578c0787c0ebe83c48f5310665/docs/Team%201%20NOVA%20Technical%20Summary.pdf)
 - [Baseline Experiment Results](docs/baseline_experiment_results.md)
 - [Alert Schema](docs/alert_schema.md)
 - [Qwen Integration](docs/qwen_integration.md)
