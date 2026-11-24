@@ -72,17 +72,26 @@ The V3 classifier experiments use:
 - Random Forest
 - 52 input features
 - 7 traffic classes
-- 10% stratified training sample
+- Per-class 10% sampling of the official V3
+  training split (176,343 records)
 - Random state 42
 
 The Decision Tree uses a maximum depth of 15 and minimum leaf
 size of 10.
 
 The Random Forest uses 50 estimators, maximum depth 15,
-minimum leaf size 10, and n_jobs=2.
+minimum leaf size 10, and n_jobs=1.
 
 Both classifiers were evaluated on the complete V3 validation
 split of 377,880 records.
+
+The saved V3 model artifacts confirm the training
+configuration. The committed notebook contains
+outputs from an earlier dataset and does not
+represent the original V3 training execution.
+
+Full training reproducibility has not been
+independently reverified.
 
 ### Preliminary Validation Results
 
@@ -126,6 +135,45 @@ Relevant files:
 - src/alert_adapter.py
 - tests/test_alert_adapter.py
 - docs/alert_schema.md
+
+### Alert Adapter Execution and Validation
+
+The alert adapter is implemented in `src/alert_adapter.py` and is used by the classifier alert-export workflow.
+
+To inspect the supported export options:
+
+```bash
+python scripts/qwen_export_v3_alerts.py --help
+```
+
+The export workflow accepts trusted saved classifier models or prediction arrays aligned with the complete V3 validation dataset.
+
+Expected outputs:
+
+- `decision_tree_alerts.json`
+- `random_forest_alerts.json`
+- `export_manifest.json`
+
+Run the adapter unit tests from the repository root:
+
+```bash
+python -m unittest discover -s tests -p "test_alert_adapter.py" -v
+```
+
+Expected result: 12 tests passed.
+
+The adapter validates identifiers, restricts evidence to approved network-flow fields, rejects invalid evidence values, and preserves original classifier predictions.
+
+Only trusted model artifacts and authorized datasets should be used. The reserved test dataset must remain excluded from this workflow.
+
+Supporting evidence:
+
+- [Baseline Experiment Results](docs/baseline_experiment_results.md)
+- [Alert Schema and Sample Structure](docs/alert_schema.md)
+- [Alert Adapter Source](src/alert_adapter.py)
+- [Alert Adapter Tests](tests/test_alert_adapter.py)
+- [Security Testing Evidence](tests/security%20test%20logs)
+- [V3 Export and Execution Guide](docs/qwen_testing_guide.md)
 
 ## Qwen AI Integration
 
