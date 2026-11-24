@@ -305,6 +305,7 @@ Final project activities include human explanation review,
 documentation reconciliation, and team release approval.
 
 ## NOVA Capstone Video Presentation
-Link: https://paceuniversity-my.sharepoint.com/:v:/g/personal/kv56727n_pace_edu/IQDj1DyQcmTgT5XD3vanCcvPAbS80t5YNCKJxQXJ081DbR8?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=dlf3A1
+Link: https://paceuniversity-my.sharepoint.com/:v:/g/personal/kv56727n_pace_edu/IQCifhnJe444Qq0zkvaY7of2AfQyWr5pE3499fePHLu572c?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=keTKta
+
 
 
