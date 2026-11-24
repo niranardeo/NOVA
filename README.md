@@ -12,14 +12,18 @@ NOVA (Network Observation and Validation with AI) is a cybersecurity research pr
 
 The project combines Decision Tree and Random Forest classifiers with a locally hosted Qwen AI model to provide additional explanations for detected activity.
 
-# Intended Users
+## Intended Users
 
 Security analysts, incident response teams, and cybersecurity researchers.
 
-# Research Objective
+## Research Objective
 NOVA investigates how effectively machine-learning models identify unusual network traffic and whether AI-assisted explanations provide useful context beyond classifier results alone.
 
 The prototype supports human decision-making without modifying original predictions or automatically responding to threats.
+
+## Code Branch
+The integrated code and documentation were merged into the main branch through pull requests #95 and #96.
+Commit: e03130c 
 
 ## System Architecture
 
