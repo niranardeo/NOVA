@@ -7,6 +7,20 @@ The project uses the CICIDS2017 dataset, Decision Tree and Random
 Forest classifiers, a structured JSON alert adapter, and a Qwen
 consumer powered by Ollama.
 
+Project Purpose:
+NOVA (Network Observation and Validation with AI) is a cybersecurity research prototype designed to identify suspicious network activity and improve security alert interpretation. Traditional detection methods can produce false positives, miss threats, or provide limited context for security investigations.
+
+The project combines Decision Tree and Random Forest classifiers with a locally hosted Qwen AI model to provide additional explanations for detected activity.
+
+# Intended Users
+
+Security analysts, incident response teams, and cybersecurity researchers.
+
+# Research Objective
+NOVA investigates how effectively machine-learning models identify unusual network traffic and whether AI-assisted explanations provide useful context beyond classifier results alone.
+
+The prototype supports human decision-making without modifying original predictions or automatically responding to threats.
+
 ## System Architecture
 
 CICIDS2017 V3 Dataset
