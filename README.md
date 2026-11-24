@@ -235,3 +235,7 @@ completed the documented integration checks.
 
 Final project activities include human explanation review,
 documentation reconciliation, and team release approval.
+
+## NOVA Capstone Video Presentation
+Link: https://paceuniversity-my.sharepoint.com/:v:/r/personal/kv56727n_pace_edu/Documents/NOVA_Capstone_Presentation_final.mp4?d=w903cd4e364724fe095c3def6a709cbcf&csf=1&web=1&nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=ZiqiJd
+
